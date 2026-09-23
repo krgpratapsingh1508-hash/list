@@ -97,7 +97,7 @@ def save_departments(depts):
         json.dump(depts, f, ensure_ascii=False, indent=4)
 
 
-FACULTY_COLUMNS = ["Department", "Faculty Name", "Designation", "Mobile Number"]
+FACULTY_COLUMNS = ["Department", "Faculty Name", "Designation", "Mobile Number", "Number of Students"]
 
 
 def load_faculty():
@@ -759,8 +759,10 @@ elif choice in ("P4 — Department Panel", "P4 — My Department List"):
 
     if role == "admin":
         with st.expander("📤 Department – Faculty Mapping अपलोड/अपडेट करें"):
-            st.caption("Excel/CSV फ़ाइल अपलोड करें जिसमें 'Department' और 'Faculty Name' कॉलम हों "
-                       "(Designation, Mobile Number वैकल्पिक)। नई फ़ाइल पुरानी mapping को replace कर देगी।")
+            st.caption("Excel/CSV फ़ाइल अपलोड करें जिसमें 'Department' (या 'Allotted Class') और 'Faculty Name' "
+                       "(या 'Name of Guardians Tutors') कॉलम हों — जैसे 'LIST OF GUARDIANS TUTORS' शीट में होता है "
+                       "(S.N., Name of Guardians Tutors, Allotted Class, Number of Student)। "
+                       "Designation, Mobile Number वैकल्पिक हैं। नई फ़ाइल पुरानी mapping को replace कर देगी।")
             fac_file = st.file_uploader("Faculty List फ़ाइल चुनें", type=["csv", "xlsx", "xls"], key="fac_upload")
             if fac_file is not None:
                 try:
@@ -773,20 +775,27 @@ elif choice in ("P4 — Department Panel", "P4 — My Department List"):
                     fac_rename = {}
                     for col in fac_raw.columns:
                         key = re.sub(r"[^a-z0-9]", "", str(col).strip().lower())
-                        if key in ("department", "dept", "departmentname"):
+                        if key in ("department", "dept", "departmentname", "allottedclass",
+                                   "class", "allottedclassname"):
                             fac_rename[col] = "Department"
                         elif key in ("facultyname", "faculty", "teachername", "mentorname",
-                                     "tutorname", "guardiantutorname"):
+                                     "tutorname", "guardiantutorname", "nameofguardianstutors",
+                                     "nameofguardiantutor", "guardianstutors", "guardiantutors",
+                                     "nameofguardian"):
                             fac_rename[col] = "Faculty Name"
                         elif key in ("designation", "post", "role"):
                             fac_rename[col] = "Designation"
                         elif key in ("mobilenumber", "mobileno", "mobile", "phone",
                                      "phonenumber", "contactno"):
                             fac_rename[col] = "Mobile Number"
+                        elif key in ("numberofstudent", "numberofstudents", "totalstudents",
+                                     "studentcount", "noofstudents", "nostudents"):
+                            fac_rename[col] = "Number of Students"
                     fac_raw = fac_raw.rename(columns=fac_rename)
 
                     if "Department" not in fac_raw.columns or "Faculty Name" not in fac_raw.columns:
-                        st.error("❌ फ़ाइल में 'Department' और 'Faculty Name' — ये दोनों कॉलम ज़रूर होने चाहिए।")
+                        st.error("❌ फ़ाइल में 'Department' (या 'Allotted Class') और 'Faculty Name' "
+                                 "(या 'Name of Guardians Tutors') — ये दोनों कॉलम ज़रूर होने चाहिए।")
                     else:
                         st.dataframe(fac_raw.head(20), use_container_width=True)
                         if st.button("💾 Faculty Mapping Save करें", type="primary"):
@@ -818,6 +827,8 @@ elif choice in ("P4 — Department Panel", "P4 — My Department List"):
                 line += f" ({frow['Designation']})"
             if str(frow.get("Mobile Number", "")).strip():
                 line += f" — 📱 {frow['Mobile Number']}"
+            if str(frow.get("Number of Students", "")).strip():
+                line += f" — 👥 {frow['Number of Students']} Students"
             st.info(line)
     else:
         st.caption("ℹ️ इस Department के लिए अभी कोई Faculty mapping उपलब्ध नहीं है (ऊपर 'Department – Faculty Mapping' से अपलोड करें)।")
