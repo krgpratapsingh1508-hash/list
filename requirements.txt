@@ -1,0 +1,4 @@
+supabase 
+streamlit
+pandas
+openpyxl
