@@ -18,6 +18,7 @@ st.set_page_config(layout="wide", page_title="Department Approval & Assignment S
 DB_FILE = "approval_workflow_database.csv"
 CRED_FILE = "approval_workflow_credentials.json"
 DEPT_FILE = "approval_workflow_departments.json"
+FACULTY_FILE = "approval_workflow_faculty.csv"
 
 # ==========================================================
 # 🧾 COLUMN SCHEMA
@@ -94,6 +95,27 @@ def load_departments():
 def save_departments(depts):
     with open(DEPT_FILE, "w", encoding="utf-8") as f:
         json.dump(depts, f, ensure_ascii=False, indent=4)
+
+
+FACULTY_COLUMNS = ["Department", "Faculty Name", "Designation", "Mobile Number"]
+
+
+def load_faculty():
+    if os.path.exists(FACULTY_FILE):
+        try:
+            df = pd.read_csv(FACULTY_FILE, dtype=str).fillna("")
+        except Exception:
+            df = pd.DataFrame(columns=FACULTY_COLUMNS)
+    else:
+        df = pd.DataFrame(columns=FACULTY_COLUMNS)
+    for c in FACULTY_COLUMNS:
+        if c not in df.columns:
+            df[c] = ""
+    return df[FACULTY_COLUMNS]
+
+
+def save_faculty(df):
+    df.to_csv(FACULTY_FILE, index=False)
 
 
 # ==========================================================
@@ -733,12 +755,72 @@ elif choice == "P3 — Approved List":
 elif choice in ("P4 — Department Panel", "P4 — My Department List"):
     st.header("🏢 P4 — Department-wise List")
     approved = db[db["Status"] == "Approved"].copy()
+    faculty_db = load_faculty()
+
+    if role == "admin":
+        with st.expander("📤 Department – Faculty Mapping अपलोड/अपडेट करें"):
+            st.caption("Excel/CSV फ़ाइल अपलोड करें जिसमें 'Department' और 'Faculty Name' कॉलम हों "
+                       "(Designation, Mobile Number वैकल्पिक)। नई फ़ाइल पुरानी mapping को replace कर देगी।")
+            fac_file = st.file_uploader("Faculty List फ़ाइल चुनें", type=["csv", "xlsx", "xls"], key="fac_upload")
+            if fac_file is not None:
+                try:
+                    fac_raw = read_uploaded_table(fac_file)
+                except Exception as e:
+                    st.error(f"❌ फ़ाइल पढ़ने में समस्या: {e}")
+                    fac_raw = pd.DataFrame()
+
+                if not fac_raw.empty:
+                    fac_rename = {}
+                    for col in fac_raw.columns:
+                        key = re.sub(r"[^a-z0-9]", "", str(col).strip().lower())
+                        if key in ("department", "dept", "departmentname"):
+                            fac_rename[col] = "Department"
+                        elif key in ("facultyname", "faculty", "teachername", "mentorname",
+                                     "tutorname", "guardiantutorname"):
+                            fac_rename[col] = "Faculty Name"
+                        elif key in ("designation", "post", "role"):
+                            fac_rename[col] = "Designation"
+                        elif key in ("mobilenumber", "mobileno", "mobile", "phone",
+                                     "phonenumber", "contactno"):
+                            fac_rename[col] = "Mobile Number"
+                    fac_raw = fac_raw.rename(columns=fac_rename)
+
+                    if "Department" not in fac_raw.columns or "Faculty Name" not in fac_raw.columns:
+                        st.error("❌ फ़ाइल में 'Department' और 'Faculty Name' — ये दोनों कॉलम ज़रूर होने चाहिए।")
+                    else:
+                        st.dataframe(fac_raw.head(20), use_container_width=True)
+                        if st.button("💾 Faculty Mapping Save करें", type="primary"):
+                            aligned_fac = pd.DataFrame(columns=FACULTY_COLUMNS)
+                            for c in FACULTY_COLUMNS:
+                                aligned_fac[c] = fac_raw[c] if c in fac_raw.columns else ""
+                            aligned_fac = aligned_fac[aligned_fac["Department"].astype(str).str.strip() != ""]
+                            save_faculty(aligned_fac)
+                            st.success(f"✅ {len(aligned_fac)} Faculty entries save हो गई हैं।")
+                            st.rerun()
+                elif fac_file is not None:
+                    st.error("❌ फ़ाइल में कोई मान्य डेटा नहीं मिला।")
+
+            if not faculty_db.empty:
+                st.markdown("**मौजूदा Faculty Mapping:**")
+                st.dataframe(faculty_db, use_container_width=True, hide_index=True)
 
     if role == "admin":
         target_dept = st.selectbox("Department चुनें", st.session_state.departments)
     else:
         target_dept = user_dept
         st.caption(f"आप लॉगिन हैं: **{target_dept}** — आपको सिर्फ़ इसी Department को Assign की गई entries दिखेंगी।")
+
+    dept_faculty = faculty_db[faculty_db["Department"] == target_dept]
+    if not dept_faculty.empty:
+        for _, frow in dept_faculty.iterrows():
+            line = f"👩‍🏫 **{frow['Faculty Name']}**"
+            if str(frow.get("Designation", "")).strip():
+                line += f" ({frow['Designation']})"
+            if str(frow.get("Mobile Number", "")).strip():
+                line += f" — 📱 {frow['Mobile Number']}"
+            st.info(line)
+    else:
+        st.caption("ℹ️ इस Department के लिए अभी कोई Faculty mapping उपलब्ध नहीं है (ऊपर 'Department – Faculty Mapping' से अपलोड करें)।")
 
     dept_view = approved[approved["Assigned Department"] == target_dept]
     st.subheader(f"📂 {target_dept} — कुल {len(dept_view)} Students")
