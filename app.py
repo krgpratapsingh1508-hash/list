@@ -755,53 +755,78 @@ elif choice in ("P4 — Department Panel", "P4 — My Department List"):
 # ==========================================================
 elif choice == "P5 — Print Panel":
     st.header("🖨️ P5 — Print Panel")
-    st.caption("यहाँ से आप किसी भी List को अपने institute के letterhead-style header के साथ खूबसूरती से Print कर सकते हैं।")
+    st.caption("यहाँ से आप किसी भी List को अपने college के letterhead-style header के साथ खूबसूरती से Print कर सकते हैं।")
 
-    # ---- Print Header Customizer ----
+    # ---- Print Header Customizer (3 lines + Guardian Tutor info row) ----
     st.subheader("📝 Print Header Customizer")
-    if "ph_line1" not in st.session_state:
-        st.session_state.ph_line1 = "Department Approval & Assignment System"
-    if "ph_line2" not in st.session_state:
-        st.session_state.ph_line2 = "Entry → Approval → Department-wise Distribution"
-    if "ph_size1" not in st.session_state:
-        st.session_state.ph_size1 = 22
-    if "ph_size2" not in st.session_state:
-        st.session_state.ph_size2 = 13
-    if "ph_color1" not in st.session_state:
-        st.session_state.ph_color1 = "#0F2A4A"
-    if "ph_color2" not in st.session_state:
-        st.session_state.ph_color2 = "#A97A25"
+    _ph_defaults = {
+        "ph_line1": "GOVERNMENT KAMLARAJA GIRLS POST GRADUATE (AUTO.) COLLEGE, GWALIOR",
+        "ph_size1": 20, "ph_color1": "#0F2A4A",
+        "ph_line2": "B.Com. FIRST YEAR (SESSION: 2025-26)",
+        "ph_size2": 16, "ph_color2": "#0F2A4A",
+        "ph_line3": "Mentor/Guardian Tutor List, Major Subject - Commerce",
+        "ph_size3": 14, "ph_color3": "#A97A25",
+        "ph_guardian_name": "", "ph_guardian_mobile": "",
+    }
+    for _k, _v in _ph_defaults.items():
+        if _k not in st.session_state:
+            st.session_state[_k] = _v
+
+    st.session_state.ph_line1 = st.text_input("Header Line 1 (College Name)", value=st.session_state.ph_line1)
+    l1a, l1b = st.columns(2)
+    with l1a:
+        st.session_state.ph_size1 = st.slider("Line 1 Font Size (px)", 12, 40, st.session_state.ph_size1)
+    with l1b:
+        st.session_state.ph_color1 = st.color_picker("Line 1 Color", st.session_state.ph_color1)
 
     ph_c1, ph_c2 = st.columns(2)
     with ph_c1:
-        st.session_state.ph_line1 = st.text_input("Header Line 1 (Institute / Report Title)", value=st.session_state.ph_line1)
-        s1a, s1b = st.columns(2)
-        with s1a:
-            st.session_state.ph_size1 = st.slider("Line 1 Font Size (px)", 12, 40, st.session_state.ph_size1)
-        with s1b:
-            st.session_state.ph_color1 = st.color_picker("Line 1 Color", st.session_state.ph_color1)
-    with ph_c2:
-        st.session_state.ph_line2 = st.text_input("Header Line 2 (Subtitle / Address)", value=st.session_state.ph_line2)
+        st.session_state.ph_line2 = st.text_input("Header Line 2 (Course & Session)", value=st.session_state.ph_line2)
         s2a, s2b = st.columns(2)
         with s2a:
             st.session_state.ph_size2 = st.slider("Line 2 Font Size (px)", 8, 30, st.session_state.ph_size2)
         with s2b:
             st.session_state.ph_color2 = st.color_picker("Line 2 Color", st.session_state.ph_color2)
+    with ph_c2:
+        st.session_state.ph_line3 = st.text_input("Header Line 3 (List Title / Subject)", value=st.session_state.ph_line3)
+        s3a, s3b = st.columns(2)
+        with s3a:
+            st.session_state.ph_size3 = st.slider("Line 3 Font Size (px)", 8, 30, st.session_state.ph_size3)
+        with s3b:
+            st.session_state.ph_color3 = st.color_picker("Line 3 Color", st.session_state.ph_color3)
 
-    st.markdown(
-        f"""
-        <div style="border:1px solid var(--pg-border); border-radius:10px; padding:14px 18px;
-            background:var(--pg-surface); text-align:center; margin-top:6px;">
-            <div style="font-family:'Poppins','Inter',sans-serif; font-weight:700;
-                font-size:{st.session_state.ph_size1}px; color:{st.session_state.ph_color1};">
+    g_c1, g_c2 = st.columns(2)
+    with g_c1:
+        st.session_state.ph_guardian_name = st.text_input("Name of Guardian Tutor (खाली छोड़ें तो print में हाथ से लिखने की जगह खाली रहेगी)", value=st.session_state.ph_guardian_name)
+    with g_c2:
+        st.session_state.ph_guardian_mobile = st.text_input("Mobile No (Guardian Tutor)", value=st.session_state.ph_guardian_mobile)
+
+    _blank_line = "&nbsp;" * 22
+
+    def _build_header_html(font_family):
+        guardian_val = st.session_state.ph_guardian_name.strip() or _blank_line
+        mobile_val = st.session_state.ph_guardian_mobile.strip() or _blank_line
+        return f"""
+        <div style="text-align:center; font-family:{font_family};">
+            <div style="font-weight:700; font-size:{st.session_state.ph_size1}px; color:{st.session_state.ph_color1};">
                 {st.session_state.ph_line1 or "&nbsp;"}
             </div>
-            <div style="font-family:'Inter',sans-serif; font-weight:600;
-                font-size:{st.session_state.ph_size2}px; color:{st.session_state.ph_color2}; margin-top:4px;">
+            <div style="font-weight:700; font-size:{st.session_state.ph_size2}px; color:{st.session_state.ph_color2}; margin-top:4px;">
                 {st.session_state.ph_line2 or "&nbsp;"}
             </div>
+            <div style="font-weight:600; font-size:{st.session_state.ph_size3}px; color:{st.session_state.ph_color3}; margin-top:4px;">
+                {st.session_state.ph_line3 or "&nbsp;"}
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:12px; font-size:14px; text-align:left;">
+                <div>Name of Guardian Tutor - <b>{guardian_val}</b></div>
+                <div>Mobile No- <b>{mobile_val}</b></div>
+            </div>
         </div>
-        """,
+        """
+
+    st.markdown(
+        f"""<div style="border:1px solid var(--pg-border); border-radius:10px; padding:14px 18px;
+            background:var(--pg-surface); margin-top:6px;">{_build_header_html("'Poppins','Inter',sans-serif")}</div>""",
         unsafe_allow_html=True,
     )
 
@@ -834,20 +859,26 @@ elif choice == "P5 — Print Panel":
 
     st.caption(f"कुल {len(pp_view)} records मिले।")
 
+    # प्रिंट में दिखने वाले कॉलम-लेबल (असली internal column names वही रहते हैं)
+    PRINT_LABEL_OVERRIDES = {"Student Name": "Full Name", "Mobile Number": "Mob. No."}
+
     if pp_view.empty:
         st.info("📭 चुने गए Filters से कोई record नहीं मिला।")
     else:
+        default_print_cols = [c for c in ["Unique ID", "Student Name", "Father Name", "Mobile Number"] if c in ALL_COLUMNS]
         pp_cols = st.multiselect(
-            "Print के लिए Columns चुनें", ALL_COLUMNS,
-            default=["Student Name", "Father Name", "Roll No.", "Subject", "Assigned Department", "Status"],
+            "Print के लिए Columns चुनें (S.No अपने आप जुड़ जाएगा)", ALL_COLUMNS,
+            default=default_print_cols,
             key="pp_cols",
         )
         if pp_cols:
-            pp_print_df = pp_view[pp_cols]
+            pp_print_df = pp_view[pp_cols].reset_index(drop=True)
+            pp_print_df.insert(0, "S.No", range(1, len(pp_print_df) + 1))
+            preview_df = pp_print_df.rename(columns=PRINT_LABEL_OVERRIDES)
 
             st.markdown("---")
             st.subheader("👁️ Preview")
-            st.dataframe(pp_print_df, use_container_width=True, hide_index=True)
+            st.dataframe(preview_df, use_container_width=True, hide_index=True)
 
             st.markdown("---")
             st.subheader("🖨️ Print / Export")
@@ -855,27 +886,15 @@ elif choice == "P5 — Print Panel":
             with pr_col1:
                 st.download_button(
                     "⬇️ CSV Download करें",
-                    pp_print_df.to_csv(index=False).encode("utf-8-sig"),
+                    preview_df.to_csv(index=False).encode("utf-8-sig"),
                     file_name="print_panel_list.csv", mime="text/csv", use_container_width=True,
                 )
             with pr_col2:
                 do_print = st.button("🖨️ Print View तैयार करें", type="primary", use_container_width=True)
 
             if do_print:
-                table_html = pp_print_df.to_html(index=False, escape=True)
-                header_html = f"""
-                <div style="text-align:center; margin-bottom:14px;">
-                    <div style="font-family:Arial, sans-serif; font-weight:700;
-                        font-size:{st.session_state.ph_size1}px; color:{st.session_state.ph_color1};">
-                        {st.session_state.ph_line1}
-                    </div>
-                    <div style="font-family:Arial, sans-serif; font-weight:600;
-                        font-size:{st.session_state.ph_size2}px; color:{st.session_state.ph_color2}; margin-top:2px;">
-                        {st.session_state.ph_line2}
-                    </div>
-                    <hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;">
-                </div>
-                """
+                table_html = preview_df.to_html(index=False, escape=True)
+                header_html = f'<div style="margin-bottom:10px;">{_build_header_html("Arial, sans-serif")}<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>'
                 st.markdown(f'<div class="print-only-container">{header_html}{table_html}</div>', unsafe_allow_html=True)
                 st.info("Print view नीचे तैयार है — अब Browser से Ctrl+P / Cmd+P दबाएँ (सिर्फ़ header + यह टेबल print होगी)।")
                 st.markdown(f'<div class="print-hide">{header_html}{table_html}</div>', unsafe_allow_html=True)
