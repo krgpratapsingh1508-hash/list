@@ -623,8 +623,32 @@ elif choice == "P2 — Approve List":
     if pending.empty:
         st.info("📭 फ़िलहाल कोई Pending entry नहीं है।")
     else:
-        st.caption(f"कुल {len(pending)} entries Approval का इंतज़ार कर रही हैं। हर entry के सामने Department चुनें, फिर 'Select' टिक करें और Approve दबाएँ।")
-        pending.insert(0, "Select", False)
+        st.caption(f"कुल {len(pending)} entries Approval का इंतज़ार कर रही हैं।")
+
+        # ---- पूरी List एक साथ Approve करें ----
+        st.markdown("### 🚀 पूरी List एक साथ Approve करें")
+        st.caption("नीचे एक Department चुनें — पूरी Pending List उसी Department को Assign होकर Approve हो जाएगी।")
+        bulk_c1, bulk_c2 = st.columns([2, 1])
+        with bulk_c1:
+            bulk_dept = st.selectbox("सभी Entries इस Department में भेजें", st.session_state.departments, key="p2_bulk_dept")
+        with bulk_c2:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            approve_all_clicked = st.button(f"✅ पूरी List ({len(pending)}) Approve करें", type="primary", use_container_width=True)
+        if approve_all_clicked:
+            for i in pending.index:
+                db.at[i, "Status"] = "Approved"
+                db.at[i, "Assigned Department"] = bulk_dept
+                db.at[i, "Approved By"] = username
+                db.at[i, "Approved On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            save_db(db)
+            st.success(f"🎉 पूरी List ({len(pending)} entries) Approve होकर '{bulk_dept}' को भेज दी गई है।")
+            st.balloons()
+            st.rerun()
+
+        st.markdown("---")
+        st.markdown("### 🖊️ या हर Entry को अलग-अलग Department देकर Approve करें")
+        select_all = st.checkbox("☑️ सभी entries Select करें", key="p2_select_all")
+        pending.insert(0, "Select", select_all)
         dept_options = st.session_state.departments
         display_cols = ["Select", "Student Name", "Father Name", "Mobile Number", "Assigned Department", "Submitted By", "Submitted On"]
         display_cols = [c for c in display_cols if c in pending.columns]
@@ -636,7 +660,7 @@ elif choice == "P2 — Approve List":
                 "Select": st.column_config.CheckboxColumn("Select"),
                 "Assigned Department": st.column_config.SelectboxColumn("Assign to Department", options=dept_options, required=False),
             },
-            key="p2_approve_editor",
+            key=f"p2_approve_editor_{select_all}",
         )
         with st.expander("🔍 पूरी row details देखें (सभी columns)"):
             st.dataframe(pending.drop(columns=["Select"]), use_container_width=True)
