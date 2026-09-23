@@ -96,11 +96,73 @@ def save_departments(depts):
 
 
 def read_uploaded_table(uploaded_file):
-    """CSV ya Excel (.csv/.xlsx/.xls) — dono ko ek DataFrame (sab text) me badalta hai."""
+    """CSV ya Excel (.csv/.xlsx/.xls) — dono ko ek DataFrame (sab text) me badalta hai.
+    .xls extension वाली फ़ाइलें असल में कई बार xlsx होती हैं, या पुराने binary xls format
+    में, या कई बार सिर्फ़ HTML table होती हैं जिन्हें .xls नाम दे दिया गया होता है
+    (कई college/university software ऐसी 'fake xls' फ़ाइलें export करते हैं) —
+    इसलिए हम extension पर भरोसा करने के बजाय फ़ाइल के असली content को पहचान कर पढ़ते हैं।
+    """
     name = uploaded_file.name.lower()
     raw = uploaded_file.getvalue()
-    if name.endswith((".xlsx", ".xls")):
-        return pd.read_excel(io.BytesIO(raw), dtype=str, engine="openpyxl" if name.endswith("xlsx") else None).fillna("")
+
+    if name.endswith((".xlsx", ".xls", ".xlsm")):
+        last_err = None
+
+        # 1) असली format फ़ाइल के binary signature से पहचानें
+        if raw[:4] == b"PK\x03\x04":
+            # ज़िप-आधारित फ़ाइल → असल में .xlsx/.xlsm है, भले ही नाम .xls हो
+            try:
+                return pd.read_excel(io.BytesIO(raw), dtype=str, engine="openpyxl").fillna("")
+            except Exception as e:
+                last_err = e
+        elif raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+            # पुराना binary Excel (असली .xls) → xlrd चाहिए
+            try:
+                return pd.read_excel(io.BytesIO(raw), dtype=str, engine="xlrd").fillna("")
+            except ImportError:
+                last_err = ValueError(
+                    "यह पुराने फ़ॉर्मेट (.xls) की असली Excel फ़ाइल है, इसे पढ़ने के लिए सर्वर पर "
+                    "'xlrd' पैकेज इंस्टॉल होना ज़रूरी है (pip install xlrd)।"
+                )
+            except Exception as e:
+                last_err = e
+        else:
+            # न zip, न binary Excel signature — अक्सर यह असल में HTML table होती है
+            try:
+                tables = pd.read_html(io.BytesIO(raw))
+                if tables:
+                    return tables[0].astype(str).fillna("")
+            except Exception as e:
+                last_err = e
+
+        # 2) ऊपर का पता न चले तो दोनों engines और HTML आज़माएँ (fallback)
+        for eng in ("openpyxl", "xlrd"):
+            try:
+                return pd.read_excel(io.BytesIO(raw), dtype=str, engine=eng).fillna("")
+            except Exception as e:
+                last_err = e
+        try:
+            tables = pd.read_html(io.BytesIO(raw))
+            if tables:
+                return tables[0].astype(str).fillna("")
+        except Exception as e:
+            last_err = e
+
+        # 3) आख़िरी कोशिश — शायद यह असल में CSV/TSV है जिसे .xls नाम दे दिया गया
+        for enc in ("utf-8-sig", "cp1252", "latin-1"):
+            try:
+                df = pd.read_csv(io.BytesIO(raw), dtype=str, encoding=enc).fillna("")
+                if not df.empty:
+                    return df
+            except Exception:
+                continue
+
+        raise ValueError(
+            f"इस फ़ाइल को Excel, HTML या CSV — किसी भी रूप में नहीं पढ़ा जा सका "
+            f"({last_err}). कृपया फ़ाइल को Excel/किसी भी spreadsheet software में खोलकर "
+            f"'Save As' → .xlsx फ़ॉर्मेट में दोबारा Save करें और फिर से अपलोड करें।"
+        )
+
     for enc in ("utf-8-sig", "cp1252", "latin-1"):
         try:
             return pd.read_csv(io.BytesIO(raw), dtype=str, encoding=enc).fillna("")
