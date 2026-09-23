@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 import io
 import json
 import time
@@ -95,82 +96,215 @@ def save_departments(depts):
         json.dump(depts, f, ensure_ascii=False, indent=4)
 
 
+# ==========================================================
+# 🔄 UNIVERSAL UPLOAD CONVERTER (P1 style): CSV / XLSX / असली-पुराना XLS /
+# Excel-XML / HTML "fake xls" — सब कुछ एक साफ़ DataFrame में
+# फ़ाइल का असली type extension से नहीं, अंदर के content (signature) से पहचाना जाता है।
+# ==========================================================
+
+def _clean_raw_table(raw):
+    """खाली rows/columns हटाओ, ऊपर के title-rows छोड़ो, सही header row ढूंढो।"""
+    raw = raw.fillna("").astype(str).apply(lambda col: col.str.strip())
+    raw = raw.loc[:, (raw != "").any(axis=0)]
+    raw = raw.loc[(raw != "").any(axis=1)].reset_index(drop=True)
+    if raw.empty:
+        return pd.DataFrame()
+    counts = (raw != "").sum(axis=1)
+    hdr = int(counts[counts >= max(1, counts.max() * 0.5)].index[0])
+    header = [h if h else f"Unnamed_{i}" for i, h in enumerate(raw.iloc[hdr].tolist())]
+    body = raw.iloc[hdr + 1:].reset_index(drop=True)
+    body.columns = header
+    return body
+
+
+def _best_frame(frames):
+    """कई sheets/tables में से सबसे ज़्यादा data वाली चुनो।"""
+    best, best_cells = pd.DataFrame(), 0
+    for f in frames:
+        cleaned = _clean_raw_table(f)
+        cells = cleaned.shape[0] * cleaned.shape[1]
+        if cells > best_cells:
+            best, best_cells = cleaned, cells
+    return best
+
+
+_UPLOAD_DIAG = {"info": ""}
+
+
+def _decode_text(raw):
+    for enc in ("utf-8-sig", "utf-16", "cp1252", "latin-1"):
+        try:
+            return raw.decode(enc), enc
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("latin-1", errors="ignore"), "latin-1"
+
+
+def _parse_spreadsheetml(text):
+    """Excel 2003 'XML Spreadsheet' (.xls नाम से save हुई XML फ़ाइल)।"""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(text.encode("utf-8"))
+    frames = []
+    for ws in root.iter():
+        if ws.tag.split("}")[-1] != "Worksheet":
+            continue
+        rows = []
+        for row in ws.iter():
+            if row.tag.split("}")[-1] != "Row":
+                continue
+            cells = []
+            for cell in row:
+                if cell.tag.split("}")[-1] != "Cell":
+                    continue
+                idx = None
+                for k, v in cell.attrib.items():
+                    if k.split("}")[-1] == "Index":
+                        idx = int(v)
+                if idx:
+                    cells += [""] * (idx - 1 - len(cells))
+                data = next((d for d in cell if d.tag.split("}")[-1] == "Data"), None)
+                cells.append("".join(data.itertext()) if data is not None else "")
+            rows.append(cells)
+        if rows:
+            width = max(len(r) for r in rows)
+            frames.append(pd.DataFrame([r + [""] * (width - len(r)) for r in rows]))
+    return frames
+
+
+def _parse_delimited_text(raw):
+    text, enc = _decode_text(raw)
+    first = "\n".join(text.splitlines()[:20])
+    seps = {"\t": first.count("\t"), ",": first.count(","), ";": first.count(";"), "|": first.count("|")}
+    sep = max(seps, key=seps.get)
+    df_t = pd.read_csv(io.StringIO(text), sep=sep, engine="python", dtype=str,
+                        header=None, on_bad_lines="skip")
+    return [df_t]
+
+
 def read_uploaded_table(uploaded_file):
-    """CSV ya Excel (.csv/.xlsx/.xls) — dono ko ek DataFrame (sab text) me badalta hai.
-    .xls extension वाली फ़ाइलें असल में कई बार xlsx होती हैं, या पुराने binary xls format
-    में, या कई बार सिर्फ़ HTML table होती हैं जिन्हें .xls नाम दे दिया गया होता है
-    (कई college/university software ऐसी 'fake xls' फ़ाइलें export करते हैं) —
-    इसलिए हम extension पर भरोसा करने के बजाय फ़ाइल के असली content को पहचान कर पढ़ते हैं।
+    """CSV/XLSX/असली पुराना XLS/Excel-XML/HTML "fake xls" — किसी भी फ़ॉर्मेट की फ़ाइल को
+    एक साफ़ DataFrame (सब text) में बदलता है। कई college/university software 'Excel' export
+    करते वक़्त असल में xlsx, या HTML table, या XML file को ही .xls नाम दे देते हैं —
+    इसलिए extension पर भरोसा करने के बजाय फ़ाइल के असली binary content से type पहचाना जाता है।
     """
     name = uploaded_file.name.lower()
     raw = uploaded_file.getvalue()
 
-    if name.endswith((".xlsx", ".xls", ".xlsm")):
-        last_err = None
-
-        # 1) असली format फ़ाइल के binary signature से पहचानें
-        if raw[:4] == b"PK\x03\x04":
-            # ज़िप-आधारित फ़ाइल → असल में .xlsx/.xlsm है, भले ही नाम .xls हो
-            try:
-                return pd.read_excel(io.BytesIO(raw), dtype=str, engine="openpyxl").fillna("")
-            except Exception as e:
-                last_err = e
-        elif raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
-            # पुराना binary Excel (असली .xls) → xlrd चाहिए
-            try:
-                return pd.read_excel(io.BytesIO(raw), dtype=str, engine="xlrd").fillna("")
-            except ImportError:
-                last_err = ValueError(
-                    "यह पुराने फ़ॉर्मेट (.xls) की असली Excel फ़ाइल है, इसे पढ़ने के लिए सर्वर पर "
-                    "'xlrd' पैकेज इंस्टॉल होना ज़रूरी है (pip install xlrd)।"
-                )
-            except Exception as e:
-                last_err = e
-        else:
-            # न zip, न binary Excel signature — अक्सर यह असल में HTML table होती है
-            try:
-                tables = pd.read_html(io.BytesIO(raw))
-                if tables:
-                    return tables[0].astype(str).fillna("")
-            except Exception as e:
-                last_err = e
-
-        # 2) ऊपर का पता न चले तो दोनों engines और HTML आज़माएँ (fallback)
-        for eng in ("openpyxl", "xlrd"):
-            try:
-                return pd.read_excel(io.BytesIO(raw), dtype=str, engine=eng).fillna("")
-            except Exception as e:
-                last_err = e
-        try:
-            tables = pd.read_html(io.BytesIO(raw))
-            if tables:
-                return tables[0].astype(str).fillna("")
-        except Exception as e:
-            last_err = e
-
-        # 3) आख़िरी कोशिश — शायद यह असल में CSV/TSV है जिसे .xls नाम दे दिया गया
+    if name.endswith(".csv"):
         for enc in ("utf-8-sig", "cp1252", "latin-1"):
             try:
                 df = pd.read_csv(io.BytesIO(raw), dtype=str, encoding=enc).fillna("")
                 if not df.empty:
                     return df
-            except Exception:
+            except UnicodeDecodeError:
                 continue
+            except pd.errors.EmptyDataError:
+                return pd.DataFrame()
+        return pd.DataFrame()
 
+    if not name.endswith((".xlsx", ".xls", ".xlsm")):
+        return pd.DataFrame()
+
+    head = raw[:8192].lstrip()
+    head_l = head.lower()
+    frames, kind = [], "unknown"
+    try:
+        if raw[:4] == b"PK\x03\x04":                                          # असली .xlsx
+            kind = "xlsx"
+            frames = list(pd.read_excel(io.BytesIO(raw), engine="openpyxl", dtype=str,
+                                         header=None, sheet_name=None).values())
+        elif raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":                   # असली पुराना .xls
+            kind = "xls"
+            try:
+                frames = list(pd.read_excel(io.BytesIO(raw), engine="xlrd", dtype=str,
+                                             header=None, sheet_name=None).values())
+            except ImportError:
+                raise ValueError(
+                    "यह पुराने फ़ॉर्मेट (.xls) की असली Excel फ़ाइल है, इसे पढ़ने के लिए सर्वर पर "
+                    "'xlrd' पैकेज इंस्टॉल होना ज़रूरी है (pip install xlrd)।"
+                )
+        elif b"urn:schemas-microsoft-com:office:spreadsheet" in raw[:8192]:    # Excel 2003 XML
+            kind = "spreadsheetml-xml"
+            frames = _parse_spreadsheetml(_decode_text(raw)[0])
+        elif head_l.startswith(b"<") or b"<table" in head_l:                  # HTML वाली "fake xls"
+            kind = "html"
+            text = _decode_text(raw)[0]
+            for t in pd.read_html(io.StringIO(text)):
+                if not isinstance(t.columns, pd.RangeIndex):
+                    hdr_row = [str(c[-1] if isinstance(c, tuple) else c) for c in t.columns]
+                    t = pd.concat([pd.DataFrame([hdr_row]),
+                                   t.set_axis(range(t.shape[1]), axis=1).astype(str)], ignore_index=True)
+                frames.append(t)
+        else:                                                                  # plain CSV/TSV text
+            kind = "text"
+            frames = _parse_delimited_text(raw)
+    except Exception as parse_err:
+        _UPLOAD_DIAG["info"] = f"type={kind}, size={len(raw)} bytes, parse error: {parse_err}"
         raise ValueError(
-            f"इस फ़ाइल को Excel, HTML या CSV — किसी भी रूप में नहीं पढ़ा जा सका "
-            f"({last_err}). कृपया फ़ाइल को Excel/किसी भी spreadsheet software में खोलकर "
-            f"'Save As' → .xlsx फ़ॉर्मेट में दोबारा Save करें और फिर से अपलोड करें।"
+            f"फ़ाइल पढ़ने में समस्या (पहचाना गया type: {kind}): {parse_err}. कृपया फ़ाइल को Excel/किसी "
+            f"भी spreadsheet software में खोलकर 'Save As' → .xlsx फ़ॉर्मेट में दोबारा Save करें।"
         )
 
-    for enc in ("utf-8-sig", "cp1252", "latin-1"):
-        try:
-            return pd.read_csv(io.BytesIO(raw), dtype=str, encoding=enc).fillna("")
-        except UnicodeDecodeError:
+    df_x = _best_frame(frames)
+    preview = raw[:120].decode("latin-1", errors="replace").replace("\n", " ").replace("\r", " ")
+    _UPLOAD_DIAG["info"] = (f"type={kind}, size={len(raw)} bytes, sheets/tables={len(frames)}, "
+                             f"rows x cols after cleanup={df_x.shape}, file start: {preview!r}")
+    return df_x
+
+
+# ==========================================================
+# 🧠 SMART COLUMN MATCHING: अपलोड फ़ाइल के headers अलग-अलग तरीकों से लिखे हो सकते
+# हैं (जैसे "DOB", "Email", "Mobile No", "Scholarship") — इन्हें सही internal
+# column नाम से automatically match करके डेटा गायब होने से बचाता है।
+# ==========================================================
+
+def _normalize_col_name(name):
+    return re.sub(r"[^a-z0-9]", "", str(name).strip().lower())
+
+
+MANUAL_COLUMN_ALIASES = {
+    "enrollmentno": "Enrollment No.", "enrollmentnumber": "Enrollment No.",
+    "enrollmentnum": "Enrollment No.", "universityenrollmentno": "Enrollment No.",
+    "applicationenrollmentno": "Application Enrollment No.",
+    "dob": "Date of Birth", "dateofbirth": "Date of Birth", "birthdate": "Date of Birth",
+    "email": "Email ID", "emailid": "Email ID", "emailaddress": "Email ID", "mailid": "Email ID",
+    "mobile": "Mobile Number", "mobileno": "Mobile Number", "mobilenumber": "Mobile Number",
+    "phone": "Mobile Number", "phonenumber": "Mobile Number", "contactno": "Mobile Number",
+    "scholarship": "Scholarship Name", "scholarshipname": "Scholarship Name",
+    "scholarshiptitle": "Scholarship Name",
+    "rollno": "Roll No.", "rollnumber": "Roll No.",
+    "studentname": "Student Name", "name": "Student Name",
+    "fathername": "Father Name", "mothername": "Mother Name",
+    "applicationno": "Application Number", "applicationnumber": "Application Number",
+    "admissionno": "Admission Application Number", "admissionapplicationno": "Admission Application Number",
+    "uniqueid": "Unique ID", "abcid": "Student Abc Id", "studentabcid": "Student Abc Id",
+    "admissiondate": "Admission Date", "admissionyear": "Admission Year",
+    "admissionsession": "Admission Session", "subjectcode": "Subject Code",
+    "currentyear": "Current Year", "admissioncategory": "Admission Category",
+    "paymentdate": "Payment Date",
+}
+
+
+def smart_align_columns(df):
+    normalized_lookup = {}
+    for internal_col in DEFAULT_COLUMNS:
+        normalized_lookup[_normalize_col_name(internal_col)] = internal_col
+    for alias_key, alias_target in MANUAL_COLUMN_ALIASES.items():
+        normalized_lookup.setdefault(alias_key, alias_target)
+
+    rename_map = {}
+    for col in df.columns:
+        if col in DEFAULT_COLUMNS:
             continue
-        except pd.errors.EmptyDataError:
-            return pd.DataFrame()
-    return pd.DataFrame()
+        key = _normalize_col_name(col)
+        if key in normalized_lookup:
+            target = normalized_lookup[key]
+            if target in df.columns:
+                continue
+            rename_map[col] = target
+    if rename_map:
+        df = df.rename(columns=rename_map)
+    return df
 
 
 # ==========================================================
@@ -424,32 +558,61 @@ if choice == "P1 — Entry & Upload":
                 st.balloons()
 
     else:
-        st.info("CSV या Excel (.csv/.xlsx/.xls) फ़ाइल अपलोड करें। कॉलम नाम ऊपर वाली list से मैच होंगे तो अपने आप भर जाएंगे — बाकी खाली रहेंगे।")
-        up_file = st.file_uploader("फ़ाइल चुनें", type=["csv", "xlsx", "xls"])
-        if up_file is not None:
-            try:
-                raw_df = read_uploaded_table(up_file)
+        st.info("CSV या Excel (.csv/.xlsx/.xls) फ़ाइलें अपलोड करें — एक साथ कई फ़ाइलें भी चुन सकते हैं। "
+                "मिलते-जुलते नाम वाले कॉलम (जैसे DOB, Email, Mobile No) अपने आप सही जगह मैच हो जाएंगे — बाकी खाली रहेंगे।")
+
+        oc1, oc2 = st.columns(2)
+        with oc1:
+            p1_common_year = st.text_input("Admission Year (सभी rows पर लागू करें, वैकल्पिक)", key="p1_common_year")
+        with oc2:
+            p1_common_session = st.text_input("Admission Session (सभी rows पर लागू करें, वैकल्पिक)", key="p1_common_session")
+        st.caption("ऊपर की दो फ़ील्ड सिर्फ़ उन्हीं rows में भरी जाएंगी जहाँ फ़ाइल में यह कॉलम पहले से खाली है।")
+
+        up_files = st.file_uploader("फ़ाइलें चुनें", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
+
+        if up_files:
+            all_new_rows = []
+            for up_file in up_files:
+                try:
+                    raw_df = read_uploaded_table(up_file)
+                except Exception as e:
+                    st.error(f"❌ '{up_file.name}' पढ़ने में समस्या: {e}")
+                    continue
+
                 if raw_df.empty:
-                    st.error("❌ फ़ाइल में डेटा नहीं मिला या फ़ॉर्मेट पढ़ा नहीं जा सका।")
-                else:
-                    st.write(f"पहचाने गए {raw_df.shape[0]} rows, {raw_df.shape[1]} columns। नीचे preview:")
+                    st.error(f"❌ '{up_file.name}' में कोई मान्य डेटा नहीं मिला या फ़ॉर्मेट पढ़ा नहीं जा सका।")
+                    if _UPLOAD_DIAG["info"]:
+                        st.caption(f"🔎 Diagnostic: {_UPLOAD_DIAG['info']}")
+                    continue
+
+                raw_df = smart_align_columns(raw_df)
+                with st.expander(f"👁️ '{up_file.name}' — {raw_df.shape[0]} rows, {raw_df.shape[1]} columns (Preview)"):
                     st.dataframe(raw_df.head(20), use_container_width=True)
-                    if st.button("📥 इन सभी Rows को Pending List में जोड़ें", type="primary"):
-                        aligned = pd.DataFrame(columns=ALL_COLUMNS)
-                        for c in DEFAULT_COLUMNS:
-                            aligned[c] = raw_df[c] if c in raw_df.columns else ""
-                        aligned["Status"] = "Pending"
-                        aligned["Assigned Department"] = ""
-                        aligned["Submitted By"] = username
-                        aligned["Submitted On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        aligned["Approved By"] = ""
-                        aligned["Approved On"] = ""
-                        db = pd.concat([db, aligned], ignore_index=True)
-                        save_db(db)
-                        st.success(f"✅ {aligned.shape[0]} rows जोड़ दी गई हैं — अब P2 में Approval के लिए उपलब्ध हैं।")
-                        st.balloons()
-            except Exception as e:
-                st.error(f"फ़ाइल पढ़ने में समस्या: {e}")
+
+                aligned = pd.DataFrame(columns=ALL_COLUMNS)
+                for c in DEFAULT_COLUMNS:
+                    aligned[c] = raw_df[c] if c in raw_df.columns else ""
+                if p1_common_year.strip():
+                    aligned.loc[aligned["Admission Year"].astype(str).str.strip() == "", "Admission Year"] = p1_common_year.strip()
+                if p1_common_session.strip():
+                    aligned.loc[aligned["Admission Session"].astype(str).str.strip() == "", "Admission Session"] = p1_common_session.strip()
+                aligned["Status"] = "Pending"
+                aligned["Assigned Department"] = ""
+                aligned["Submitted By"] = username
+                aligned["Submitted On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                aligned["Approved By"] = ""
+                aligned["Approved On"] = ""
+                all_new_rows.append(aligned)
+
+            if all_new_rows:
+                total_rows = sum(len(a) for a in all_new_rows)
+                st.success(f"✅ कुल {len(all_new_rows)} फ़ाइलों से {total_rows} rows पढ़ ली गई हैं — नीचे बटन दबाकर पक्का जोड़ें।")
+                if st.button(f"📥 इन सभी {total_rows} Rows को Pending List में जोड़ें", type="primary"):
+                    db = pd.concat([db] + all_new_rows, ignore_index=True)
+                    save_db(db)
+                    st.success(f"🎉 {total_rows} rows जोड़ दी गई हैं — अब P2 में Approval के लिए उपलब्ध हैं।")
+                    st.balloons()
+                    st.rerun()
 
 # ==========================================================
 # ✅ P2 — APPROVE LIST  (Admin only)
