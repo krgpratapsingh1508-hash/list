@@ -482,7 +482,7 @@ st.markdown("""
 def print_button(body_html, label="🖨️ Print करें", height=52):
     doc = (
         '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Print</title><style>'
-        '@page { margin: 8mm; size: A4 landscape; }'
+        '@page { margin: 8mm; }'
         '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }'
         'body { font-family: Arial, sans-serif; color: #000; }'
         'table { width: 100%; border-collapse: collapse; font-size: 11px; }'
