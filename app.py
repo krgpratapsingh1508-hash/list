@@ -41,6 +41,9 @@ DEFAULT_COLUMNS = [
 SYSTEM_COLUMNS = ["Status", "Assigned Department", "Submitted By", "Submitted On", "Approved By", "Approved On", "Show In Panels"]
 ALL_COLUMNS = DEFAULT_COLUMNS + SYSTEM_COLUMNS
 
+# Mobile No. khaali ho to P3 (dikhane ke liye) aur P5 header (print ke liye) me yah line aati hai. Data me ye save nahi hoti.
+MOBILE_BLANK = "_" * 14
+
 # P1 me har upload ke saath chuna jaata hai ki wo kin panels me dikhe (P1/P6 hamesha admin ke liye hain)
 PANEL_OPTIONS = {
     "P2": "P2 — List",
@@ -954,7 +957,7 @@ elif choice == "P3 — Guardian Tutors List":
         "S.N.": range(1, len(_fac) + 1),
         "DEPARTMENT": _fac["Tutor Department"].map(lambda v: v if str(v).strip() else None),
         "NAME OF GUARDIANS TUTORS": _fac["Faculty Name"],
-        "MOBILE NO.": _fac["Mobile Number"],
+        "MOBILE NO.": _fac["Mobile Number"].map(lambda v: v if str(v).strip() else MOBILE_BLANK),
         "Allotted Class": _fac["Department"],
         "NUMBER OF STUDENT": _fac["Number of Students"],
     })
@@ -982,6 +985,7 @@ elif choice == "P3 — Guardian Tutors List":
     with _fac_c2:
         _dl = _fac_edit.reset_index(drop=True).copy()
         _dl["S.N."] = range(1, len(_dl) + 1)
+        _dl["MOBILE NO."] = _dl["MOBILE NO."].map(lambda v: "" if v is None or str(v).strip("_ ").strip() == "" else v)
         st.download_button("⬇️ CSV Download करें", _dl.to_csv(index=False).encode("utf-8-sig"),
                            file_name="guardian_tutors_list.csv", mime="text/csv", use_container_width=True)
 
@@ -994,7 +998,7 @@ elif choice == "P3 — Guardian Tutors List":
             _name = _cv(_r.get("NAME OF GUARDIANS TUTORS"))
             _cls = _cv(_r.get("Allotted Class"))
             _num = _cv(_r.get("NUMBER OF STUDENT"))
-            _mob = _cv(_r.get("MOBILE NO."))
+            _mob = _cv(_r.get("MOBILE NO.")).replace("_", "").strip()      # "______" wali khaali line data me save nahi hoti
             if not _name and not _cls and not _num and not _mob and not _tdept:
                 continue          # पूरी खाली Row सेव नहीं होगी
             # Designation (जो यहाँ नहीं दिखता) पुरानी Row से बचाकर रखें
@@ -1155,7 +1159,7 @@ elif choice == "P5 — Print Panel":
 
     def _build_header_html(font_family):
         guardian_val = st.session_state.ph_guardian_name.strip() or _blank_line
-        mobile_val = st.session_state.ph_guardian_mobile.strip() or _blank_line
+        mobile_val = st.session_state.ph_guardian_mobile.strip() or MOBILE_BLANK
         return f"""
         <div style="text-align:center; font-family:{font_family};">
             <div style="font-weight:700; font-size:{st.session_state.ph_size1}px; color:{st.session_state.ph_color1};">
