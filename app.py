@@ -1113,4 +1113,4 @@ elif choice == "P6 — Admin Panel":
         st.dataframe(db, use_container_width=True, hide_index=True)
         st.download_button("⬇️ पूरा Database Backup (CSV) Download करें",
                             db.to_csv(index=False).encode("utf-8-sig"),
-                            file_name="full_database_backup.csv", mime="text/csv"
+                            file_name="full_database_backup.csv", mime="text/csv")
