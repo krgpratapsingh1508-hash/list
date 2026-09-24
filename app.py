@@ -609,6 +609,9 @@ db = load_db()
 # ==========================================================
 if choice == "P1 — Entry & Upload":
     st.header("📝 P1 — Data Entry & Upload")
+    _flash = st.session_state.pop("p1_flash", None)
+    if _flash:
+        st.success(_flash)
     mode = st.radio("तरीका चुनें", ["✍️ Single Entry (Form)", "📤 Bulk Upload (CSV/Excel)"], horizontal=True)
 
     if mode == "✍️ Single Entry (Form)":
@@ -671,7 +674,8 @@ if choice == "P1 — Entry & Upload":
         else:
             p1_bulk_dept = ""
 
-        up_files = st.file_uploader("फ़ाइलें चुनें", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
+        up_files = st.file_uploader("फ़ाइलें चुनें", type=["csv", "xlsx", "xls"], accept_multiple_files=True,
+                                    key=f"p1_bulk_up_{st.session_state.get('p1_bulk_up_n', 0)}")
 
         if up_files:
             all_new_rows = []
@@ -714,8 +718,12 @@ if choice == "P1 — Entry & Upload":
                 if st.button(f"📥 इन सभी {total_rows} Rows को सीधे Approve करके जोड़ें" + (f" ('{p1_bulk_dept}' में)" if p1_bulk_dept else ""), type="primary", disabled=not p1_bulk_panels):
                     db = pd.concat([db] + all_new_rows, ignore_index=True)
                     save_db(db)
-                    st.success(f"🎉 {total_rows} rows सीधे Approve हो गईं — {', '.join(p1_bulk_panels)} में दिखेंगी" + (f" (Department: '{p1_bulk_dept}')।" if p1_bulk_dept else "।"))
-                    st.balloons()
+                    st.session_state["p1_flash"] = (
+                        f"🎉 {total_rows} rows Approve होकर save हो गईं — {', '.join(p1_bulk_panels)} में दिखेंगी"
+                        + (f" (Department: '{p1_bulk_dept}')" if p1_bulk_dept else "")
+                        + f"। Database में अब कुल {len(db)} records हैं।"
+                    )
+                    st.session_state["p1_bulk_up_n"] = st.session_state.get("p1_bulk_up_n", 0) + 1
                     st.rerun()
 
 # ==========================================================
@@ -754,7 +762,12 @@ elif choice == "P3 — Approved List":
     _p3_rows = filter_for_panel(db, "P3")
     approved = _p3_rows[_p3_rows["Status"] == "Approved"].copy()
     if approved.empty:
-        st.info("📭 अभी तक कोई entry Approve नहीं हुई है।")
+        st.info("📭 P3 में दिखाने के लिए अभी कोई Approved entry नहीं है।")
+        if db.empty:
+            st.warning(f"⚠️ Database खाली है (0 records) — `{DB_FILE}` में कोई data save नहीं हुआ। P1 से List जोड़ने के बाद बटन दबाना ज़रूरी है।")
+        else:
+            _not_p3 = len(db) - len(_p3_rows)
+            st.caption(f"Database में कुल {len(db)} records हैं; इनमें से {_not_p3} records P1 में P3 के लिए tick नहीं किए गए थे।")
     else:
         f_col1, f_col2 = st.columns([1, 2])
         with f_col1:
