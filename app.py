@@ -37,8 +37,16 @@ DEFAULT_COLUMNS = [
 ]
 
 # System / workflow columns — inhe app khud manage karti hai, user in par bharosa kare
-SYSTEM_COLUMNS = ["Status", "Assigned Department", "Submitted By", "Submitted On", "Approved By", "Approved On"]
+SYSTEM_COLUMNS = ["Status", "Assigned Department", "Submitted By", "Submitted On", "Approved By", "Approved On", "Show In Panels"]
 ALL_COLUMNS = DEFAULT_COLUMNS + SYSTEM_COLUMNS
+
+# P1 me har upload ke saath chuna jaata hai ki wo kin panels me dikhe (P1/P6 hamesha admin ke liye hain)
+PANEL_OPTIONS = {
+    "P2": "P2 — List",
+    "P3": "P3 — Approved List",
+    "P4": "P4 — Department Panel",
+    "P5": "P5 — Print Panel",
+}
 
 DEFAULT_DEPARTMENTS = ["Examination Department", "Accounts Department", "Scholarship Department", "Registrar Office"]
 
@@ -66,6 +74,16 @@ def load_db():
 
 def save_db(df):
     df.to_csv(DB_FILE, index=False)
+
+
+def filter_for_panel(df, panel_code):
+    """Sirf wahi rows lautata hai jinhe P1 me is panel (P2/P3/P4/P5) ke liye tick kiya gaya tha.
+    Purane records jinme 'Show In Panels' khaali hai, sabhi panels me dikhte rahenge."""
+    if df.empty:
+        return df
+    col = df["Show In Panels"].astype(str).str.strip()
+    ok = (col == "") | col.apply(lambda v: panel_code in [x.strip() for x in v.split(",")])
+    return df[ok]
 
 
 def load_credentials():
@@ -595,6 +613,10 @@ if choice == "P1 — Entry & Upload":
 
     if mode == "✍️ Single Entry (Form)":
         p1_single_dept = st.selectbox("Department (Approve होकर यहीं भेजी जाएगी)", st.session_state.departments, key="p1_single_dept")
+        p1_single_panels = st.multiselect(
+            "यह Entry किन Panels में दिखे?", list(PANEL_OPTIONS.keys()), default=list(PANEL_OPTIONS.keys()),
+            format_func=lambda k: PANEL_OPTIONS[k], key="p1_single_panels",
+        )
         with st.form("single_entry_form"):
             st.caption("नीचे जितने columns भरने हैं भरें — बाकी खाली छोड़ सकते हैं।")
             values = {}
@@ -606,11 +628,14 @@ if choice == "P1 — Entry & Upload":
         if submit_entry:
             if not any(str(v).strip() for v in values.values()):
                 st.warning("⚠️ कृपया कम से कम एक फ़ील्ड भरें।")
+            elif not p1_single_panels:
+                st.warning("⚠️ कम से कम एक Panel चुनें जहाँ यह Entry दिखे।")
             else:
                 new_row = {c: "" for c in ALL_COLUMNS}
                 new_row.update(values)
                 new_row["Status"] = "Approved"
                 new_row["Assigned Department"] = p1_single_dept
+                new_row["Show In Panels"] = ",".join(p1_single_panels)
                 new_row["Submitted By"] = username
                 new_row["Submitted On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                 new_row["Approved By"] = username
@@ -632,6 +657,12 @@ if choice == "P1 — Entry & Upload":
         with oc3:
             p1_bulk_dept = st.selectbox("Department (सभी rows Approve होकर यहीं जाएंगी)", st.session_state.departments, key="p1_bulk_dept")
         st.caption("ऊपर की दो फ़ील्ड सिर्फ़ उन्हीं rows में भरी जाएंगी जहाँ फ़ाइल में यह कॉलम पहले से खाली है।")
+        p1_bulk_panels = st.multiselect(
+            "यह List किन Panels में दिखे?", list(PANEL_OPTIONS.keys()), default=list(PANEL_OPTIONS.keys()),
+            format_func=lambda k: PANEL_OPTIONS[k], key="p1_bulk_panels",
+        )
+        if not p1_bulk_panels:
+            st.warning("⚠️ कम से कम एक Panel चुनें, तभी List जोड़ी जा सकेगी।")
 
         up_files = st.file_uploader("फ़ाइलें चुनें", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
 
@@ -663,6 +694,7 @@ if choice == "P1 — Entry & Upload":
                     aligned.loc[aligned["Admission Session"].astype(str).str.strip() == "", "Admission Session"] = p1_common_session.strip()
                 aligned["Status"] = "Approved"
                 aligned["Assigned Department"] = p1_bulk_dept
+                aligned["Show In Panels"] = ",".join(p1_bulk_panels)
                 aligned["Submitted By"] = username
                 aligned["Submitted On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                 aligned["Approved By"] = username
@@ -672,7 +704,7 @@ if choice == "P1 — Entry & Upload":
             if all_new_rows:
                 total_rows = sum(len(a) for a in all_new_rows)
                 st.success(f"✅ कुल {len(all_new_rows)} फ़ाइलों से {total_rows} rows पढ़ ली गई हैं — नीचे बटन दबाकर पक्का जोड़ें।")
-                if st.button(f"📥 इन सभी {total_rows} Rows को सीधे Approve करके '{p1_bulk_dept}' में जोड़ें", type="primary"):
+                if st.button(f"📥 इन सभी {total_rows} Rows को सीधे Approve करके '{p1_bulk_dept}' में जोड़ें", type="primary", disabled=not p1_bulk_panels):
                     db = pd.concat([db] + all_new_rows, ignore_index=True)
                     save_db(db)
                     st.success(f"🎉 {total_rows} rows सीधे Approve होकर '{p1_bulk_dept}' को भेज दी गई हैं।")
@@ -689,7 +721,7 @@ elif choice == "P2 — List":
     else:
         st.caption(f"कुल {len(db)} entries मौजूद हैं — सभी columns नीचे दिख रहे हैं।")
         p2_search = st.text_input("🔎 किसी भी field से खोजें", key="p2_search")
-        p2_view = db.copy()
+        p2_view = filter_for_panel(db, "P2").copy()
         if p2_search.strip():
             s = p2_search.strip().lower()
             p2_view = p2_view[p2_view.apply(lambda r: s in " ".join(str(v).lower() for v in r.values), axis=1)]
@@ -712,7 +744,8 @@ elif choice == "P2 — List":
 # ==========================================================
 elif choice == "P3 — Approved List":
     st.header("📋 P3 — Approved List (सभी Departments)")
-    approved = db[db["Status"] == "Approved"].copy()
+    _p3_rows = filter_for_panel(db, "P3")
+    approved = _p3_rows[_p3_rows["Status"] == "Approved"].copy()
     if approved.empty:
         st.info("📭 अभी तक कोई entry Approve नहीं हुई है।")
     else:
@@ -755,7 +788,8 @@ elif choice == "P3 — Approved List":
 # ==========================================================
 elif choice in ("P4 — Department Panel", "P4 — My Department List"):
     st.header("🏢 P4 — Department-wise List")
-    approved = db[db["Status"] == "Approved"].copy()
+    _p4_rows = filter_for_panel(db, "P4")
+    approved = _p4_rows[_p4_rows["Status"] == "Approved"].copy()
     faculty_db = load_faculty()
 
     if role == "admin":
@@ -940,7 +974,7 @@ elif choice == "P5 — Print Panel":
     with d_col3:
         pp_search = st.text_input("🔎 Student Name / Roll No. / Unique ID से खोजें", key="pp_search")
 
-    pp_view = db.copy()
+    pp_view = filter_for_panel(db, "P5").copy()
     if status_choice != "सभी":
         pp_view = pp_view[pp_view["Status"].astype(str).str.strip().str.lower() == status_choice.lower()]
     if role != "admin":
