@@ -1465,7 +1465,43 @@ elif choice == "P6 — Admin Panel":
 
     with tab_data:
         st.subheader("पूरा Database")
-        st.dataframe(db, use_container_width=True, hide_index=True)
+        if db.empty:
+            st.info("📭 Database खाली है।")
+        else:
+            _p6d_flash = st.session_state.pop("p6_data_flash", None)
+            if _p6d_flash:
+                st.success(_p6d_flash)
+            st.caption("नीचे टेबल में किसी भी row के शुरू में checkbox से एक या कई rows select करें, "
+                       "फिर नीचे '🗑️ Selected Rows Delete करें' बटन से उन्हें हमेशा के लिए हटाएँ।")
+            _p6d_search = st.text_input("🔎 Database में खोजें (select करने से पहले छाँटने के लिए)", key="p6_data_search")
+            _p6d_view = db.copy()
+            if _p6d_search.strip():
+                _s = _p6d_search.strip().lower()
+                _p6d_view = _p6d_view[_p6d_view.apply(lambda r: _s in " ".join(str(v).lower() for v in r.values), axis=1)]
+            st.caption(f"{len(_p6d_view)} rows दिख रही हैं।")
+            _p6d_key = f"p6_data_select_{st.session_state.get('p6_data_select_n', 0)}"
+            _p6d_event = st.dataframe(
+                _p6d_view,
+                use_container_width=True,
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="multi-row",
+                key=_p6d_key,
+            )
+            _p6d_sel_positions = list(_p6d_event.selection.rows) if _p6d_event and getattr(_p6d_event, "selection", None) else []
+            if _p6d_sel_positions:
+                _p6d_sel_orig_idx = _p6d_view.iloc[_p6d_sel_positions].index.tolist()
+                st.warning(f"⚠️ {len(_p6d_sel_positions)} row(s) select की गई हैं — Delete करने से पहले ध्यान से देख लें, यह Database से हमेशा के लिए हट जाएँगी।")
+                with st.expander("👁️ Select की गई rows देखें"):
+                    st.dataframe(_p6d_view.loc[_p6d_sel_orig_idx], use_container_width=True, hide_index=True)
+                if st.button(f"🗑️ Selected {len(_p6d_sel_positions)} Row(s) Delete करें", type="secondary", key="p6_data_delete_btn"):
+                    db = db.drop(index=_p6d_sel_orig_idx).reset_index(drop=True)
+                    save_db(db)
+                    st.session_state["p6_data_flash"] = f"🗑️ {len(_p6d_sel_orig_idx)} row(s) Database से हटा दी गई हैं। अब कुल {len(db)} records हैं।"
+                    st.session_state["p6_data_select_n"] = st.session_state.get("p6_data_select_n", 0) + 1
+                    st.rerun()
+            else:
+                st.caption("अभी कोई row select नहीं की गई है।")
         st.download_button("⬇️ पूरा Database Backup (CSV) Download करें",
                             db.to_csv(index=False).encode("utf-8-sig"),
                             file_name="full_database_backup.csv", mime="text/csv")
