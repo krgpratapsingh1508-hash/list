@@ -607,6 +607,36 @@ def faculty_upload_ui(key_prefix):
 
 
 # ==========================================================
+# 🏢 DEPARTMENT RENAME HELPER — naam har jagah ek saath badalta hai
+# (Departments list, P1 se save records, Department users, P3 Tutors list)
+# ==========================================================
+def rename_department(old, new):
+    depts = [new if d == old else d for d in st.session_state.departments]
+    st.session_state.departments = depts
+    save_departments(depts)
+
+    _db = load_db()
+    if not _db.empty:
+        _db.loc[_db["Assigned Department"] == old, "Assigned Department"] = new
+        save_db(_db)
+
+    creds = st.session_state.credentials
+    for _u, _v in creds.items():
+        if _v.get("department") == old:
+            _v["department"] = new
+            if old in str(_v.get("label", "")):
+                _v["label"] = str(_v["label"]).replace(old, new)
+    st.session_state.credentials = creds
+    save_credentials(creds)
+
+    _fac = load_faculty()
+    if not _fac.empty:
+        _fac.loc[_fac["Tutor Department"] == old, "Tutor Department"] = new
+        _fac.loc[_fac["Department"] == old, "Department"] = new
+        save_faculty(_fac)
+
+
+# ==========================================================
 # 🛑 STEP 4: LOGIN GATEWAY
 # ==========================================================
 if st.session_state.user_role is None:
@@ -854,6 +884,28 @@ elif choice == "P3 — Guardian Tutors List":
     with st.expander("📤 फ़ाइल से List अपलोड करें (Excel / CSV)", expanded=_fac.empty):
         faculty_upload_ui("p3")
 
+    with st.expander("🏢 DEPARTMENT की List (नीचे DEPARTMENT dropdown में यही दिखती हैं)"):
+        st.caption("अभी की Departments: " + (", ".join(st.session_state.departments) or "—")
+                   + ".  नाम बदलने / हटाने / पूरी List बदलने के लिए **P6 → Departments** खोलें।")
+        _qd1, _qd2 = st.columns([3, 1])
+        with _qd1:
+            _quick_dept = st.text_input("नया Department जोड़ें", key="p3_quick_dept", placeholder="जैसे: Commerce")
+        with _qd2:
+            st.write("")
+            _quick_add = st.button("➕ जोड़ें", key="p3_quick_dept_btn", use_container_width=True)
+        if _quick_add:
+            _qn = _quick_dept.strip()
+            if not _qn:
+                st.warning("⚠️ नाम खाली है।")
+            elif _qn in st.session_state.departments:
+                st.warning("⚠️ यह Department पहले से मौजूद है।")
+            else:
+                _dl2 = list(st.session_state.departments) + [_qn]
+                st.session_state.departments = _dl2
+                save_departments(_dl2)
+                st.session_state["p3_fac_flash"] = f"✅ Department '{_qn}' जुड़ गया — अब DEPARTMENT dropdown में चुन सकते हैं।"
+                st.rerun()
+
     st.caption("यहाँ से आप Text बदल सकते हैं, नई Row जोड़ सकते हैं (टेबल के नीचे ➕) और Row हटा सकते हैं "
                "(Row चुनकर 🗑️)। बदलाव के बाद **💾 Save Changes** ज़रूर दबाएँ। "
                "'Allotted Class' का नाम वही रखें जो P4 में Department का नाम है, ताकि P4 में यह Tutor सही जगह दिखे।")
@@ -865,7 +917,7 @@ elif choice == "P3 — Guardian Tutors List":
         list(st.session_state.departments) + [d for d in _fac["Tutor Department"].astype(str).str.strip() if d]))
     _fac_view = pd.DataFrame({
         "S.N.": range(1, len(_fac) + 1),
-        "DEPARTMENT": _fac["Tutor Department"].replace("", None),
+        "DEPARTMENT": _fac["Tutor Department"].map(lambda v: v if str(v).strip() else None),
         "NAME OF GUARDIANS TUTORS": _fac["Faculty Name"],
         "MOBILE NO.": _fac["Mobile Number"],
         "Allotted Class": _fac["Department"],
@@ -1253,6 +1305,9 @@ elif choice == "P6 — Admin Panel":
 
     with tab_depts:
         st.subheader("Departments की List")
+        _dflash = st.session_state.pop("p6_dept_flash", None)
+        if _dflash:
+            st.success(_dflash)
         depts = st.session_state.departments
         st.dataframe(pd.DataFrame({"Department": depts}), use_container_width=True, hide_index=True)
         add_col, del_col = st.columns(2)
@@ -1276,6 +1331,44 @@ elif choice == "P6 — Admin Panel":
                     save_departments(depts)
                     st.success(f"🗑️ '{rm_dept}' हटा दिया गया।")
                     st.rerun()
+
+        st.markdown("---")
+        st.markdown("**✏️ Department का नाम बदलें** (Records, Users और Tutors List में भी नया नाम अपने आप लग जाएगा)")
+        if depts:
+            rn_c1, rn_c2 = st.columns(2)
+            with rn_c1:
+                rn_old = st.selectbox("कौन सा Department बदलना है", depts, key="rn_dept_old")
+            with rn_c2:
+                rn_new = st.text_input("नया नाम", key="rn_dept_new")
+            if st.button("✏️ नाम बदलें", key="rn_dept_btn"):
+                _n = rn_new.strip()
+                if not _n:
+                    st.warning("⚠️ नया नाम खाली नहीं हो सकता।")
+                elif _n in depts:
+                    st.warning("⚠️ यह नाम पहले से मौजूद है।")
+                else:
+                    rename_department(rn_old, _n)
+                    st.session_state["p6_dept_flash"] = f"✅ '{rn_old}' का नाम बदलकर '{_n}' हो गया।"
+                    st.rerun()
+
+        st.markdown("---")
+        st.markdown("**📝 पूरी Departments List एक साथ बदलें** (हर लाइन में एक Department)")
+        bulk_txt = st.text_area("Departments", value="\n".join(depts), height=180,
+                                key=f"p6_dept_bulk_{abs(hash(tuple(depts)))}",
+                                help="जैसे: Commerce, Science, Arts — हर नाम अलग लाइन में लिखें।")
+        if st.button("💾 यह List Save करें", type="primary", key="p6_dept_bulk_btn"):
+            _new_list = list(dict.fromkeys([x.strip() for x in bulk_txt.split("\n") if x.strip()]))
+            if not _new_list:
+                st.warning("⚠️ कम से कम एक Department होना ज़रूरी है।")
+            else:
+                save_departments(_new_list)
+                st.session_state.departments = _new_list
+                _orphans = int((~db["Assigned Department"].isin(_new_list + [""])).sum()) if not db.empty else 0
+                st.session_state["p6_dept_flash"] = (
+                    f"✅ Departments List बदल गई — अब {len(_new_list)} Departments हैं।"
+                    + (f" ⚠️ {_orphans} पुराने records के Department का नाम नई List में नहीं है (नाम बदलने के लिए ऊपर '✏️ नाम बदलें' इस्तेमाल करें)।" if _orphans else "")
+                )
+                st.rerun()
 
     with tab_data:
         st.subheader("पूरा Database")
