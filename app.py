@@ -39,14 +39,11 @@ DEFAULT_COLUMNS = [
 SYSTEM_COLUMNS = ["Status", "Assigned Department", "Submitted By", "Submitted On", "Approved By", "Approved On"]
 ALL_COLUMNS = DEFAULT_COLUMNS + SYSTEM_COLUMNS
 
-DEFAULT_DEPARTMENTS = ["UG", "PG"]
+DEFAULT_DEPARTMENTS = ["Examination Department", "Accounts Department", "Scholarship Department", "Registrar Office"]
 
-# ==========================================================
-# 🔑 PANEL-BASED LOGIN (koi username nahi — sirf panel चुनें + उस panel का password)
-# ==========================================================
-PANEL_LIST = ["Entry", "Approve", "UG", "PG", "Dashboard", "Admin"]
-PANEL_ICONS = {"Entry": "📝", "Approve": "✅", "UG": "🎓", "PG": "📖", "Dashboard": "📊", "Admin": "🛠️"}
-DEFAULT_CREDENTIALS = {p: f"{p.lower()}123" for p in PANEL_LIST}
+DEFAULT_CREDENTIALS = {
+    "admin": {"password": "admin123", "role": "admin", "label": "👑 Super Admin (P1–P6 Full Control)"}
+}
 
 # ==========================================================
 # 📦 STEP 2: LOAD / SAVE HELPERS
@@ -335,8 +332,6 @@ def smart_align_columns(df):
 # ==========================================================
 # 🔐 SESSION STATE INIT
 # ==========================================================
-if "current_panel" not in st.session_state:
-    st.session_state.current_panel = None
 if "user_role" not in st.session_state:
     st.session_state.user_role = None
 if "username" not in st.session_state:
@@ -482,94 +477,58 @@ st.markdown("""
 # ==========================================================
 # 🛑 STEP 4: LOGIN GATEWAY
 # ==========================================================
-if st.session_state.current_panel is None:
-    # 👉 Apni photo baad me yahan lagayen: neeche wale emoji-circle ki jagah
-    #    st.image("apni_photo.png", width=120) use kar dein.
-    st.markdown(
-        """
-        <div style="display:flex; justify-content:center; margin-top:10px;">
-            <div style="width:120px; height:120px; border-radius:50%; background:#EEF1F6;
-                border:3px solid #C9973F; display:flex; align-items:center; justify-content:center;
-                box-shadow:0 4px 14px rgba(15,42,74,0.15); overflow:hidden;">
-                <span style="font-size:52px;">🏛️</span>
-            </div>
+if st.session_state.user_role is None:
+    header_html = """
+    <div style="display:flex; align-items:center; gap:20px; margin-bottom:20px; font-family:'Poppins','Inter',sans-serif;
+        background: linear-gradient(135deg, #FFFFFF 0%, #F5F7FA 100%); border: 1px solid #DCE3EC; border-radius: 12px; padding: 16px 20px;">
+        <div style="flex-shrink:0; width:70px; height:70px; display:flex; align-items:center; justify-content:center;
+            border-radius:10px; box-shadow:0 4px 12px rgba(15,42,74,0.18); border:2px solid #C9973F;">
+            <h1 style="margin:0;">🏛️</h1>
         </div>
-        <h1 style="text-align:center; color:#3B5BFF; margin:14px 0 2px 0; font-family:'Poppins','Inter',sans-serif; font-size:32px;">
-            NEP Master Data System
-        </h1>
-        <p style="text-align:center; color:#555; margin-top:0;">
-            अपना पैनल चुनें और आगे बढ़ने के लिए पासवर्ड डालें
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
+        <div style="display:flex; flex-direction:column; justify-content:center;">
+            <h1 style="margin:0 !important; padding:0 !important; color:#0F2A4A; font-size:30px; font-weight:700; border:none !important;">
+                Department Approval &amp; Assignment System</h1>
+            <h3 style="margin:2px 0 0 0 !important; padding:0 !important; color:#A97A25; font-weight:600 !important; font-size:15px;">
+                Entry → Approval → Department-wise Distribution</h3>
+        </div>
+    </div>
+    """
+    st.markdown(header_html, unsafe_allow_html=True)
 
-    st.write("")
-    chip_cols = st.columns(len(PANEL_LIST))
-    for i, p_name in enumerate(PANEL_LIST):
-        with chip_cols[i]:
-            if st.button(f"{PANEL_ICONS[p_name]} {p_name}", key=f"chip_{p_name}", use_container_width=True):
-                st.session_state["login_panel_select"] = p_name
+    login_col, _ = st.columns([1, 1.4])
+    with login_col:
+        st.subheader("🔐 Login")
+        with st.form("login_form"):
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Login", type="primary", use_container_width=True)
+        if submitted:
+            creds = st.session_state.credentials
+            entry = creds.get(u.strip())
+            if entry and entry.get("password") == p:
+                st.session_state.user_role = entry.get("role")
+                st.session_state.username = u.strip()
+                st.session_state.user_department = entry.get("department")
+                st.success(f"स्वागत है, {u.strip()}!")
+                time.sleep(0.4)
                 st.rerun()
-
-    st.write("")
-    center_col, _ = st.columns([1.3, 1])
-    with center_col:
-        with st.container(border=True):
-            st.markdown("📂 **पैनल चुनें:**")
-            login_options = ["-- चुनें --"] + PANEL_LIST
-            if "login_panel_select" not in st.session_state:
-                st.session_state["login_panel_select"] = "-- चुनें --"
-            chosen_panel = st.selectbox(
-                "पैनल चुनें", login_options, key="login_panel_select", label_visibility="collapsed",
-            )
-
-            st.markdown("🔑 **Password:**")
-            show_pw = st.checkbox("👁️ Password दिखाएं", key="login_show_pw")
-            entered_pw = st.text_input(
-                "Password", type="default" if show_pw else "password",
-                placeholder="अपना पासवर्ड यहाँ डालें", label_visibility="collapsed", key="login_pw_field",
-            )
-
-            login_clicked = st.button("🚀 Login करें", type="primary", use_container_width=True)
-
-            if login_clicked:
-                if chosen_panel == "-- चुनें --":
-                    st.error("❌ कृपया पहले एक पैनल चुनें।")
-                else:
-                    creds = st.session_state.credentials
-                    if creds.get(chosen_panel) == entered_pw:
-                        st.session_state.current_panel = chosen_panel
-                        st.session_state.user_role = "admin" if chosen_panel == "Admin" else "panel"
-                        st.session_state.username = chosen_panel
-                        st.session_state.user_department = chosen_panel if chosen_panel in ("UG", "PG") else None
-                        st.success(f"स्वागत है, {chosen_panel} Panel!")
-                        time.sleep(0.4)
-                        st.rerun()
-                    else:
-                        st.error("❌ गलत Password। कृपया दोबारा कोशिश करें।")
-
-    st.markdown(
-        "<p style='text-align:center; color:#A97A25; margin-top:18px;'>"
-        "🔒 आपका डेटा सुरक्षित है — हर पैनल का अपना अलग पासवर्ड है</p>",
-        unsafe_allow_html=True,
-    )
-    st.caption("Default passwords → Entry: entry123, Approve: approve123, UG: ug123, PG: pg123, "
-               "Dashboard: dashboard123, Admin: admin123 — पहली बार login के बाद P6 → Admin Panel से बदल लें।")
+            else:
+                st.error("❌ गलत Username या Password। कृपया दोबारा कोशिश करें।")
+        st.caption("Default admin login → **admin / admin123** (पहली बार login करने के बाद P6 → Admin Panel से password बदल लें)")
     st.stop()
 
 # ==========================================================
 # 🧭 STEP 5: SIDEBAR NAVIGATION
 # ==========================================================
-panel = st.session_state.current_panel
 role = st.session_state.user_role
 username = st.session_state.username
 user_dept = st.session_state.user_department
 
 with st.sidebar:
-    st.markdown(f"### {PANEL_ICONS.get(panel, '👤')} {panel} Panel")
+    st.markdown(f"### 👤 {username}")
+    st.caption(st.session_state.credentials.get(username, {}).get("label", role))
     st.markdown("---")
-    if panel == "Admin":
+    if role == "admin":
         panel_options = [
             "P1 — Entry & Upload",
             "P2 — Approve List",
@@ -578,22 +537,11 @@ with st.sidebar:
             "P5 — Print Panel",
             "P6 — Admin Panel",
         ]
-        choice = st.radio("Navigate Panels", panel_options, label_visibility="visible")
-    elif panel == "Entry":
-        choice = "P1 — Entry & Upload"
-        st.caption("📝 इस पैनल से सिर्फ़ Entry & Upload उपलब्ध है।")
-    elif panel == "Approve":
-        choice = "P2 — Approve List"
-        st.caption("✅ इस पैनल से सिर्फ़ Approve List उपलब्ध है।")
-    elif panel == "Dashboard":
-        choice = "P3 — Approved List"
-        st.caption("📊 इस पैनल से Approved List (Dashboard View) उपलब्ध है।")
-    else:  # UG / PG
-        choice = "P4 — My Department List"
-        st.caption(f"🎓 इस पैनल से सिर्फ़ '{panel}' की List उपलब्ध है।")
+    else:
+        panel_options = ["P4 — My Department List"]
+    choice = st.radio("Navigate Panels", panel_options, label_visibility="visible")
     st.markdown("---")
     if st.button("🚪 Logout", use_container_width=True):
-        st.session_state.current_panel = None
         st.session_state.user_role = None
         st.session_state.username = None
         st.session_state.user_department = None
@@ -1067,37 +1015,72 @@ elif choice == "P6 — Admin Panel":
             st.dataframe(dept_counts.rename_axis("Department").reset_index(name="Count"), use_container_width=True, hide_index=True)
 
     with tab_users:
-        st.subheader("🔑 Panel Passwords")
-        st.caption("अब login username-based नहीं है — हर panel (Entry/Approve/UG/PG/Dashboard/Admin) का अपना अलग password है।")
+        st.subheader("मौजूदा Users")
         creds = st.session_state.credentials
-        for p_name in PANEL_LIST:
-            creds.setdefault(p_name, DEFAULT_CREDENTIALS[p_name])
-        pw_table = pd.DataFrame([
-            {"Panel": f"{PANEL_ICONS[p_name]} {p_name}", "Password (masked)": "•" * max(len(creds[p_name]), 4)}
-            for p_name in PANEL_LIST
+        users_table = pd.DataFrame([
+            {"Username": u, "Role": v.get("role"), "Department": v.get("department", "-"), "Label": v.get("label", "")}
+            for u, v in creds.items()
         ])
-        st.dataframe(pw_table, use_container_width=True, hide_index=True)
+        st.dataframe(users_table, use_container_width=True, hide_index=True)
 
         st.markdown("---")
-        st.markdown("**✏️ किसी Panel का Password बदलें**")
-        with st.form("change_panel_pw"):
-            pw_col1, pw_col2 = st.columns(2)
-            with pw_col1:
-                panel_to_change = st.selectbox("Panel चुनें", PANEL_LIST)
-                cur_panel_pw = st.text_input("Current Password", type="password")
-            with pw_col2:
-                new_panel_pw = st.text_input("नया Password", type="password")
-            change_pw_btn = st.form_submit_button("Password अपडेट करें", type="primary")
-        if change_pw_btn:
-            if creds.get(panel_to_change) != cur_panel_pw:
-                st.error("❌ Current Password ग़लत है।")
-            elif not new_panel_pw.strip():
-                st.warning("⚠️ नया Password खाली नहीं हो सकता।")
+        st.markdown("**➕ नया Department User बनाएँ**")
+        with st.form("new_user_form"):
+            nu_col1, nu_col2 = st.columns(2)
+            with nu_col1:
+                new_username = st.text_input("Username")
+                new_password = st.text_input("Password")
+            with nu_col2:
+                new_dept = st.selectbox("Department", st.session_state.departments)
+                new_label = st.text_input("Display Label (optional)", value="")
+            add_user_btn = st.form_submit_button("➕ User जोड़ें", type="primary")
+        if add_user_btn:
+            if not new_username.strip() or not new_password.strip():
+                st.warning("⚠️ Username और Password दोनों भरना ज़रूरी है।")
+            elif new_username.strip() in creds:
+                st.error("❌ यह Username पहले से मौजूद है।")
             else:
-                creds[panel_to_change] = new_panel_pw
+                creds[new_username.strip()] = {
+                    "password": new_password,
+                    "role": "department",
+                    "department": new_dept,
+                    "label": new_label.strip() or f"🏢 {new_dept}",
+                }
                 st.session_state.credentials = creds
                 save_credentials(creds)
-                st.success(f"✅ '{panel_to_change}' Panel का Password अपडेट हो गया।")
+                st.success(f"✅ User '{new_username.strip()}' बन गया — यह सिर्फ़ '{new_dept}' का P4 देख पाएगा।")
+                st.rerun()
+
+        st.markdown("---")
+        st.markdown("**🗑️ User हटाएँ**")
+        deletable_users = [u for u in creds.keys() if u != "admin"]
+        if deletable_users:
+            del_user = st.selectbox("हटाने के लिए User चुनें", deletable_users)
+            if st.button("🗑️ Delete User", type="secondary"):
+                creds.pop(del_user, None)
+                st.session_state.credentials = creds
+                save_credentials(creds)
+                st.success(f"🗑️ User '{del_user}' हटा दिया गया।")
+                st.rerun()
+        else:
+            st.caption("कोई अतिरिक्त User नहीं है (Admin नहीं हटाया जा सकता)।")
+
+        st.markdown("---")
+        st.markdown("**🔑 Admin Password बदलें**")
+        with st.form("change_admin_pw"):
+            cur_pw = st.text_input("Current Password", type="password")
+            new_pw = st.text_input("New Password", type="password")
+            change_btn = st.form_submit_button("Password अपडेट करें", type="primary")
+        if change_btn:
+            if creds.get("admin", {}).get("password") != cur_pw:
+                st.error("❌ Current Password ग़लत है।")
+            elif not new_pw.strip():
+                st.warning("⚠️ नया Password खाली नहीं हो सकता।")
+            else:
+                creds["admin"]["password"] = new_pw
+                st.session_state.credentials = creds
+                save_credentials(creds)
+                st.success("✅ Admin Password अपडेट हो गया।")
 
     with tab_depts:
         st.subheader("Departments की List")
@@ -1130,4 +1113,4 @@ elif choice == "P6 — Admin Panel":
         st.dataframe(db, use_container_width=True, hide_index=True)
         st.download_button("⬇️ पूरा Database Backup (CSV) Download करें",
                             db.to_csv(index=False).encode("utf-8-sig"),
-                            file_name="full_database_backup.csv", mime="text/csv")
+                            file_name="full_database_backup.csv", mime="text/csv"
