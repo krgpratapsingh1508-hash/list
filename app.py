@@ -47,7 +47,16 @@ PANEL_OPTIONS = {
     "P5": "P5 — Print Panel",
 }
 
-DEFAULT_DEPARTMENTS = ["Examination Department", "Accounts Department", "Scholarship Department", "Registrar Office"]
+DEFAULT_DEPARTMENTS = [
+    "Hindi", "Sanskrit", "Urdu", "English",
+    "Economics", "History", "Philosophy", "Political Science",
+    "Psychology", "Sociology", "Geography", "Drawing and Painting",
+    "Music & Dance", "Home Science", "Chemistry", "Physics",
+    "Mathematics", "Zoology", "Botany", "Biotechnology",
+    "Computer Science", "Commerce & Management", "Institute of Law",
+]
+# App ki purani (shuruati) default list — agar saved list bilkul yahi hai (kabhi badli nahi gayi), to nayi list se replace hogi
+OLD_DEFAULT_DEPARTMENTS = ["Examination Department", "Accounts Department", "Scholarship Department", "Registrar Office"]
 
 DEFAULT_CREDENTIALS = {
     "admin": {"password": "admin123", "role": "admin", "label": "👑 Super Admin (P1–P6 Full Control)"}
@@ -108,7 +117,12 @@ def load_departments():
     if os.path.exists(DEPT_FILE):
         try:
             with open(DEPT_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                saved = json.load(f)
+            if saved == OLD_DEFAULT_DEPARTMENTS:          # kabhi customize nahi ki gayi purani default list
+                new_list = list(DEFAULT_DEPARTMENTS)
+                save_departments(new_list)
+                return new_list
+            return saved
         except Exception:
             pass
     return list(DEFAULT_DEPARTMENTS)
