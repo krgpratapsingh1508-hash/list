@@ -1407,6 +1407,19 @@ elif choice == "P5 — Print Panel":
             pp_print_df.insert(0, "S.No", range(1, len(pp_print_df) + 1))
             preview_df = pp_print_df.rename(columns=PRINT_LABEL_OVERRIDES)
 
+            # Sirf Print/Preview/Download ke liye — har text column ka 1st letter capital, baaki small
+            # (Database "db" mein asli data bilkul waisa hi rehta hai, isse yahan chhua nahi jaata)
+            def _p5_name_case(val):
+                s = str(val).strip()
+                if not s or s.replace(".", "", 1).isdigit():   # khaali ya pure numbers/decimal ko chhedo nahi
+                    return val
+                return " ".join(w[0].upper() + w[1:].lower() if w else w for w in s.split(" "))
+
+            for _pcol in preview_df.columns:
+                if _pcol == "S.No":
+                    continue
+                preview_df[_pcol] = preview_df[_pcol].map(_p5_name_case)
+
             st.markdown("---")
             st.subheader("👁️ Preview")
             st.dataframe(preview_df, use_container_width=True, hide_index=True)
