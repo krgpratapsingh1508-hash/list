@@ -51,6 +51,32 @@ PANEL_OPTIONS = {
     "P5": "P5 — Print Panel",
 }
 
+# "Current Year" (course year) ke liye standard 5 values — "1st Year" hi asli/canonical form hai.
+COURSE_YEAR_OPTIONS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"]
+# Bahut saare likhne ke tareeke (First Year, 1, I Year, Year-1, आदि) — sabko upar wali canonical form me badalne ke liye.
+_COURSE_YEAR_ALIASES = {
+    "1st year": "1st Year", "first year": "1st Year", "1": "1st Year", "1st": "1st Year",
+    "i year": "1st Year", "year 1": "1st Year", "year1": "1st Year", "year-1": "1st Year", "प्रथम वर्ष": "1st Year",
+    "2nd year": "2nd Year", "second year": "2nd Year", "2": "2nd Year", "2nd": "2nd Year",
+    "ii year": "2nd Year", "year 2": "2nd Year", "year2": "2nd Year", "year-2": "2nd Year", "द्वितीय वर्ष": "2nd Year",
+    "3rd year": "3rd Year", "third year": "3rd Year", "3": "3rd Year", "3rd": "3rd Year",
+    "iii year": "3rd Year", "year 3": "3rd Year", "year3": "3rd Year", "year-3": "3rd Year", "तृतीय वर्ष": "3rd Year",
+    "4th year": "4th Year", "fourth year": "4th Year", "4": "4th Year", "4th": "4th Year",
+    "iv year": "4th Year", "year 4": "4th Year", "year4": "4th Year", "year-4": "4th Year", "चतुर्थ वर्ष": "4th Year",
+    "5th year": "5th Year", "fifth year": "5th Year", "5": "5th Year", "5th": "5th Year",
+    "v year": "5th Year", "year 5": "5th Year", "year5": "5th Year", "year-5": "5th Year", "पंचम वर्ष": "5th Year",
+}
+
+
+def normalize_course_year(value):
+    """'First Year', 'second year', '2', 'II Year' jaise kisi bhi likhne ke tareeke ko
+    canonical '1st Year' / '2nd Year' / ... form me badal deta hai. Na-pehchaana gaya text jaisa hai waisa hi rehta hai."""
+    s = str(value).strip()
+    if not s:
+        return s
+    key = re.sub(r"\s+", " ", s.lower().replace(".", "").strip())
+    return _COURSE_YEAR_ALIASES.get(key, s)
+
 DEFAULT_DEPARTMENTS = [
     "Hindi", "Sanskrit", "Urdu", "English",
     "Economics", "History", "Philosophy", "Political Science",
@@ -777,7 +803,7 @@ if choice == "P1 — Entry & Upload":
                     if col_name == "Current Year":
                         values[col_name] = st.selectbox(
                             "🎓 Current Year (1st/2nd/3rd/4th/5th)",
-                            ["", "1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"],
+                            [""] + COURSE_YEAR_OPTIONS,
                             key=f"p1_field_{col_name}",
                         )
                     else:
@@ -819,7 +845,7 @@ if choice == "P1 — Entry & Upload":
                 key="p1_common_year",
             )
         with oc2:
-            _p1_course_year_options = ["-- लागू न करें --", "1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"]
+            _p1_course_year_options = ["-- लागू न करें --"] + COURSE_YEAR_OPTIONS
             p1_common_course_year = st.selectbox(
                 "🎓 यह List किस Year (1st/2nd/3rd/4th/5th) की है?",
                 _p1_course_year_options,
@@ -878,6 +904,8 @@ if choice == "P1 — Entry & Upload":
                     aligned[c] = raw_df[c] if c in raw_df.columns else ""
                 aligned = aligned.reindex(columns=ALL_COLUMNS).fillna("").reset_index(drop=True)
                 aligned["Admission Year"] = p1_common_year.strip()   # is upload/list ka year — sabhi rows par lagu (overwrite)
+                # File me "Current Year" jaise bhi likha ho (First Year / Second Year / II Year / 2 ...) — canonical form me badlo
+                aligned["Current Year"] = aligned["Current Year"].map(normalize_course_year)
                 if p1_common_course_year != "-- लागू न करें --":
                     aligned["Current Year"] = p1_common_course_year   # 1st/2nd/3rd/4th/5th Year — sabhi rows par lagu (overwrite)
                 if p1_common_session.strip():
@@ -1359,6 +1387,7 @@ elif choice == "P6 — Admin Panel":
                 "Vocational Subjects": "Vocational Subjects",
                 "MDC Subjects": "MDC Subjects",
                 "PW/Ap/CE Subjects": "PW/Ap/CE Subjects",
+                "Current Year": "Current Year",
             }
             _p6_sum_layout = st.columns(3)
             for _p6_i, (_p6_label, _p6_col) in enumerate(_p6_summary_cols.items()):
@@ -1370,6 +1399,9 @@ elif choice == "P6 — Admin Panel":
                     # comma se split — agar kisi record me ek se zyada Minor/Voc/MDC/PW subject saath likhe hon
                     _p6_split = db[_p6_col].astype(str).str.split(",")
                     _p6_flat = [v.strip() for sub in _p6_split for v in sub if v.strip()]
+                    if _p6_col == "Current Year":
+                        # First Year / Second Year / II Year / 2 ... jaisa bhi purana likha ho, sab ek jaisi form me count ho
+                        _p6_flat = [normalize_course_year(v) for v in _p6_flat]
                     if _p6_flat:
                         _p6_vc = pd.Series(_p6_flat).value_counts().rename_axis(_p6_label).reset_index(name="कितने Students")
                         st.dataframe(_p6_vc, use_container_width=True, hide_index=True)
