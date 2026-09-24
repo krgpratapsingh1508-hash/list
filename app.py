@@ -863,7 +863,7 @@ elif choice == "P3 — Guardian Tutors List":
         "NUMBER OF STUDENT": _fac["Number of Students"],
         "MOBILE NO.": _fac["Mobile Number"],
     })
-    _fac_key = f"p3_fac_editor_{st.session_state.get('p3_fac_n', 0)}"
+    _fac_key = f"p3_fac_editor_v2_{st.session_state.get('p3_fac_n', 0)}"      # v2: Mobile column ke saath
     _fac_edit = st.data_editor(
         _fac_view,
         num_rows="dynamic",
