@@ -369,6 +369,7 @@ MANUAL_COLUMN_ALIASES = {
     "mobno": "Mobile Number", "mobnumber": "Mobile Number", "mobilenum": "Mobile Number",
     "contactnumber": "Mobile Number", "phoneno": "Mobile Number", "contact": "Mobile Number",
     "mobilenumber1": "Mobile Number", "studentmobileno": "Mobile Number", "studentmobile": "Mobile Number",
+    "majorsubject": "Subject", "majorsub": "Subject", "mainsubject": "Subject",
     "uid": "Unique ID", "uniqueno": "Unique ID", "uniqueidno": "Unique ID",
     "rollnumber": "Roll No.", "rno": "Roll No.",
 }
@@ -1074,6 +1075,7 @@ elif choice == "P5 — Print Panel":
         "ph_course": "B.Com. FIRST YEAR",
         "ph_size2": 16, "ph_color2": "#0F2A4A",
         "ph_line3": "Mentor/Guardian Tutor List, Major Subject - Commerce",
+        "ph_title3": "Mentor/Guardian Tutor List",
         "ph_size3": 14, "ph_color3": "#A97A25",
         "ph_guardian_name": "", "ph_guardian_mobile": "",
     }
@@ -1109,7 +1111,8 @@ elif choice == "P5 — Print Panel":
         with s2b:
             st.session_state.ph_color2 = st.color_picker("Line 2 Color", st.session_state.ph_color2)
     with ph_c2:
-        st.session_state.ph_line3 = st.text_input("Header Line 3 (List Title / Subject)", value=st.session_state.ph_line3)
+        st.session_state.ph_title3 = st.text_input("Header Line 3 — List Title", value=st.session_state.ph_title3)
+        st.text_input("Major Subject (खाली छोड़ें = P2 के Data के 'Subject' से अपने आप)", key="ph_major_manual")
         s3a, s3b = st.columns(2)
         with s3a:
             st.session_state.ph_size3 = st.slider("Line 3 Font Size (px)", 8, 30, st.session_state.ph_size3)
@@ -1171,12 +1174,6 @@ elif choice == "P5 — Print Panel":
         </div>
         """
 
-    st.markdown(
-        f"""<div style="border:1px solid var(--pg-border); border-radius:10px; padding:14px 18px;
-            background:var(--pg-surface); margin-top:6px;">{_build_header_html("'Poppins','Inter',sans-serif")}</div>""",
-        unsafe_allow_html=True,
-    )
-
     st.markdown("---")
 
     # ---- Data selection ----
@@ -1205,6 +1202,31 @@ elif choice == "P5 — Print Panel":
         pp_view = pp_view[pp_view.apply(lambda r: s in " ".join(str(v).lower() for v in r.values), axis=1)]
 
     st.caption(f"कुल {len(pp_view)} records मिले।")
+
+    # ---- Header Line 3: Major Subject P2 ke data ke "Subject" column se apne aap ----
+    _subj = pp_view["Subject"].astype(str).str.strip()
+    _auto_subjects = list(_subj[_subj != ""].value_counts().index)
+    _manual_subject = st.session_state.get("ph_major_manual", "").strip()
+    _major = _manual_subject or ", ".join(_auto_subjects)
+    _title3 = st.session_state.ph_title3.strip()
+    if _title3 and _major:
+        st.session_state.ph_line3 = f"{_title3}, Major Subject - {_major}"
+    else:
+        st.session_state.ph_line3 = _title3 or (f"Major Subject - {_major}" if _major else "")
+    if _manual_subject:
+        st.caption(f"📘 Major Subject (आपने खुद लिखा): **{_manual_subject}**")
+    elif not _auto_subjects:
+        st.warning("⚠️ इस List के records में 'Subject' खाली है, इसलिए Header में Major Subject नहीं आएगा — ऊपर Major Subject खुद भी लिख सकते हैं।")
+    elif len(_auto_subjects) > 1:
+        st.warning(f"⚠️ इस List में एक से ज़्यादा Subject हैं ({_major}). List छोटी करें (Department / Search से) या ऊपर Major Subject खुद लिखें।")
+    else:
+        st.caption(f"📘 Major Subject (P2 के Subject से): **{_major}**")
+
+    st.markdown(
+        f"""<div style="border:1px solid var(--pg-border); border-radius:10px; padding:14px 18px;
+            background:var(--pg-surface); margin-top:6px;">{_build_header_html("'Poppins','Inter',sans-serif")}</div>""",
+        unsafe_allow_html=True,
+    )
 
     # प्रिंट में दिखने वाले कॉलम-लेबल (असली internal column names वही रहते हैं)
     PRINT_LABEL_OVERRIDES = {
