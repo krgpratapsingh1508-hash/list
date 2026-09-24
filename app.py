@@ -119,7 +119,8 @@ def save_departments(depts):
         json.dump(depts, f, ensure_ascii=False, indent=4)
 
 
-FACULTY_COLUMNS = ["Department", "Faculty Name", "Designation", "Mobile Number", "Number of Students"]
+# NOTE: "Department" = Allotted Class (purana naam, data na tootne ke liye); "Tutor Department" = P3 ka naya DEPARTMENT column
+FACULTY_COLUMNS = ["Department", "Faculty Name", "Designation", "Mobile Number", "Number of Students", "Tutor Department"]
 
 
 def load_faculty():
@@ -547,9 +548,9 @@ def print_button(body_html, label="🖨️ Print करें", height=52):
 # 👩‍🏫 GUARDIAN TUTORS LIST UPLOAD (P3 aur P4 dono me use hota hai)
 # ==========================================================
 def faculty_upload_ui(key_prefix):
-    st.caption("Excel/CSV फ़ाइल अपलोड करें जिसमें 'Allotted Class' (या 'Department') और 'Name of Guardians Tutors' "
-               "(या 'Faculty Name') कॉलम हों — जैसे 'LIST OF GUARDIANS TUTORS' शीट में होता है "
-               "(S.N., Name of Guardians Tutors, Allotted Class, Number of Student)। "
+    st.caption("Excel/CSV फ़ाइल अपलोड करें जिसमें 'Name of Guardians Tutors' (या 'Faculty Name') और 'Department' / 'Allotted Class' "
+               "कॉलम हों — जैसे 'LIST OF GUARDIANS TUTORS' शीट में होता है "
+               "(S.N., Department, Name of Guardians Tutors, Mobile No., Allotted Class, Number of Student)। "
                "Designation, Mobile Number वैकल्पिक हैं। ⚠️ नई फ़ाइल पुरानी List को replace कर देगी।")
     fac_file = st.file_uploader("Guardian Tutors List फ़ाइल चुनें", type=["csv", "xlsx", "xls"], key=f"{key_prefix}_fac_upload")
     if fac_file is None:
@@ -566,8 +567,10 @@ def faculty_upload_ui(key_prefix):
     fac_rename = {}
     for col in fac_raw.columns:
         key = re.sub(r"[^a-z0-9]", "", str(col).strip().lower())
-        if key in ("department", "dept", "departmentname", "allottedclass", "class", "allottedclassname"):
-            fac_rename[col] = "Department"
+        if key in ("allottedclass", "class", "allottedclassname"):
+            fac_rename[col] = "Department"                 # Allotted Class
+        elif key in ("department", "dept", "departmentname", "tutordepartment", "deptname"):
+            fac_rename[col] = "Tutor Department"           # naya DEPARTMENT column
         elif key in ("facultyname", "faculty", "teachername", "mentorname", "tutorname", "guardiantutorname",
                      "nameofguardianstutors", "nameofguardiantutor", "guardianstutors", "guardiantutors",
                      "nameofguardian", "nameofguardianstutor", "guardiantutor", "nameofguardiantutors"):
@@ -581,9 +584,9 @@ def faculty_upload_ui(key_prefix):
             fac_rename[col] = "Number of Students"
     fac_raw = fac_raw.rename(columns=fac_rename)
 
-    if "Department" not in fac_raw.columns or "Faculty Name" not in fac_raw.columns:
-        st.error("❌ फ़ाइल में 'Allotted Class' (या 'Department') और 'Name of Guardians Tutors' "
-                 "(या 'Faculty Name') — ये दोनों कॉलम ज़रूर होने चाहिए। "
+    if "Faculty Name" not in fac_raw.columns or not ({"Department", "Tutor Department"} & set(fac_raw.columns)):
+        st.error("❌ फ़ाइल में 'Name of Guardians Tutors' (या 'Faculty Name') और 'Department' या 'Allotted Class' "
+                 "में से कम से कम एक कॉलम ज़रूर होना चाहिए। "
                  f"फ़ाइल के columns: {', '.join(map(str, fac_raw.columns))}")
         return
 
@@ -595,7 +598,8 @@ def faculty_upload_ui(key_prefix):
         aligned_fac = aligned_fac.fillna("").astype(str).reset_index(drop=True)
         for _c in ("Mobile Number", "Number of Students"):          # Excel के "9876543210.0" जैसे मान साफ़ करें
             aligned_fac[_c] = aligned_fac[_c].str.strip().str.replace(r"\.0$", "", regex=True)
-        aligned_fac = aligned_fac[(aligned_fac["Department"].str.strip() != "") | (aligned_fac["Faculty Name"].str.strip() != "")]
+        aligned_fac = aligned_fac[(aligned_fac["Department"].str.strip() != "") | (aligned_fac["Faculty Name"].str.strip() != "")
+                                  | (aligned_fac["Tutor Department"].str.strip() != "")]
         save_faculty(aligned_fac.reset_index(drop=True))
         st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
         st.session_state["p3_fac_flash"] = f"✅ {len(aligned_fac)} Guardian Tutors की List Save हो गई है।"
@@ -856,14 +860,18 @@ elif choice == "P3 — Guardian Tutors List":
     if _fac.empty:
         st.info("📭 अभी List खाली है — ऊपर से फ़ाइल अपलोड करें, या नीचे टेबल में ➕ से Row जोड़ें।")
 
+    # DEPARTMENT dropdown: app ke Departments + list me pehle se maujood koi bhi purana naam
+    _dept_opts = list(dict.fromkeys(
+        list(st.session_state.departments) + [d for d in _fac["Tutor Department"].astype(str).str.strip() if d]))
     _fac_view = pd.DataFrame({
         "S.N.": range(1, len(_fac) + 1),
+        "DEPARTMENT": _fac["Tutor Department"].replace("", None),
         "NAME OF GUARDIANS TUTORS": _fac["Faculty Name"],
         "MOBILE NO.": _fac["Mobile Number"],
         "Allotted Class": _fac["Department"],
         "NUMBER OF STUDENT": _fac["Number of Students"],
     })
-    _fac_key = f"p3_fac_editor_v3_{st.session_state.get('p3_fac_n', 0)}"      # v3: column order badalne par naya key
+    _fac_key = f"p3_fac_editor_v4_{st.session_state.get('p3_fac_n', 0)}"      # v4: DEPARTMENT column jodne par naya key
     _fac_edit = st.data_editor(
         _fac_view,
         num_rows="dynamic",
@@ -872,6 +880,7 @@ elif choice == "P3 — Guardian Tutors List":
         disabled=["S.N."],
         column_config={
             "S.N.": st.column_config.NumberColumn("S.N.", width="small"),
+            "DEPARTMENT": st.column_config.SelectboxColumn("DEPARTMENT", options=_dept_opts, required=False),
             "NAME OF GUARDIANS TUTORS": st.column_config.TextColumn("NAME OF GUARDIANS TUTORS", width="large"),
             "MOBILE NO.": st.column_config.TextColumn("MOBILE NO."),
             "Allotted Class": st.column_config.TextColumn("Allotted Class"),
@@ -891,12 +900,15 @@ elif choice == "P3 — Guardian Tutors List":
 
     if _save_fac:
         _rows = []
+        def _cv(v):          # None / NaN -> "" , baaki text
+            return "" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v).strip()
         for _idx, _r in _fac_edit.iterrows():
-            _name = str(_r.get("NAME OF GUARDIANS TUTORS") or "").strip()
-            _cls = str(_r.get("Allotted Class") or "").strip()
-            _num = str(_r.get("NUMBER OF STUDENT") or "").strip()
-            _mob = str(_r.get("MOBILE NO.") or "").strip()
-            if not _name and not _cls and not _num and not _mob:
+            _tdept = _cv(_r.get("DEPARTMENT"))
+            _name = _cv(_r.get("NAME OF GUARDIANS TUTORS"))
+            _cls = _cv(_r.get("Allotted Class"))
+            _num = _cv(_r.get("NUMBER OF STUDENT"))
+            _mob = _cv(_r.get("MOBILE NO."))
+            if not _name and not _cls and not _num and not _mob and not _tdept:
                 continue          # पूरी खाली Row सेव नहीं होगी
             # Designation (जो यहाँ नहीं दिखता) पुरानी Row से बचाकर रखें
             _old = _fac.loc[_idx] if _idx in _fac.index else None
@@ -906,6 +918,7 @@ elif choice == "P3 — Guardian Tutors List":
                 "Designation": _old["Designation"] if _old is not None else "",
                 "Mobile Number": _mob,
                 "Number of Students": _num,
+                "Tutor Department": _tdept,
             })
         save_faculty(pd.DataFrame(_rows, columns=FACULTY_COLUMNS))
         st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
@@ -935,7 +948,7 @@ elif choice in ("P4 — Department Panel", "P4 — My Department List"):
         target_dept = user_dept
         st.caption(f"आप लॉगिन हैं: **{target_dept}** — आपको सिर्फ़ इसी Department को Assign की गई entries दिखेंगी।")
 
-    dept_faculty = faculty_db[faculty_db["Department"] == target_dept]
+    dept_faculty = faculty_db[(faculty_db["Tutor Department"] == target_dept) | (faculty_db["Department"] == target_dept)]
     if not dept_faculty.empty:
         for _, frow in dept_faculty.iterrows():
             line = f"👩‍🏫 **{frow['Faculty Name']}**"
@@ -1011,15 +1024,17 @@ elif choice == "P5 — Print Panel":
     _p5_opts = {}
     for _i, _r in _p5_fac.iterrows():
         _lbl = str(_r["Faculty Name"]).strip()
-        if str(_r["Department"]).strip():
-            _lbl += f" — {str(_r['Department']).strip()}"
+        _lbl_extra = str(_r["Tutor Department"]).strip() or str(_r["Department"]).strip()
+        if _lbl_extra:
+            _lbl += f" — {_lbl_extra}"
         if _lbl in _p5_opts:
             _lbl += f" (#{_i + 1})"
         _p5_opts[_lbl] = _r
     _p5_choices = [_p5_blank_opt] + list(_p5_opts.keys())
     if st.session_state.get("ph_guardian_pick") not in _p5_choices:
         st.session_state.pop("ph_guardian_pick", None)        # List बदल गई हो तो पुरानी चॉइस हटाएँ
-    _p5_pick = st.selectbox("Guardian Tutor चुनें (P3 की List से)", _p5_choices, key="ph_guardian_pick")
+    _p5_pick = st.selectbox("Guardian Tutor चुनें (P3 की List से)", _p5_choices, key="ph_guardian_pick",
+                            index=1 if len(_p5_opts) == 1 else 0)
     if _p5_pick == _p5_blank_opt:
         st.session_state.ph_guardian_name = ""
         st.session_state.ph_guardian_mobile = ""
@@ -1030,7 +1045,7 @@ elif choice == "P5 — Print Panel":
     else:
         _p5_row = _p5_opts[_p5_pick]
         st.session_state.ph_guardian_name = str(_p5_row["Faculty Name"]).strip()
-        st.session_state.ph_guardian_mobile = str(_p5_row["Mobile Number"]).strip()
+        st.session_state.ph_guardian_mobile = re.sub(r"\.0$", "", str(_p5_row["Mobile Number"]).strip())
         st.caption(f"👩‍🏫 **{st.session_state.ph_guardian_name}** — 📱 "
                    + (st.session_state.ph_guardian_mobile or "Mobile No. P3 की List में खाली है (P3 में भरें)"))
 
