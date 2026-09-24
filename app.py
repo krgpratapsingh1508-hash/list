@@ -1347,6 +1347,35 @@ elif choice == "P6 — Admin Panel":
             dept_counts = db[db["Status"] == "Approved"]["Assigned Department"].value_counts()
             st.dataframe(dept_counts.rename_axis("Department").reset_index(name="Count"), use_container_width=True, hide_index=True)
 
+        st.markdown("---")
+        st.markdown("**🎓 Degree / Major / Minor / MDC / Vocational / PW-AP-CE — कितनी-कितनी हैं**")
+        if db.empty:
+            st.caption("📭 Database खाली है।")
+        else:
+            _p6_summary_cols = {
+                "Degree": "Degree",
+                "Major Subject": "Subject",
+                "Minor Subjects": "Minor Subjects",
+                "Vocational Subjects": "Vocational Subjects",
+                "MDC Subjects": "MDC Subjects",
+                "PW/Ap/CE Subjects": "PW/Ap/CE Subjects",
+            }
+            _p6_sum_layout = st.columns(3)
+            for _p6_i, (_p6_label, _p6_col) in enumerate(_p6_summary_cols.items()):
+                with _p6_sum_layout[_p6_i % 3]:
+                    st.caption(f"**{_p6_label}**")
+                    if _p6_col not in db.columns:
+                        st.caption("— कॉलम मौजूद नहीं।")
+                        continue
+                    # comma se split — agar kisi record me ek se zyada Minor/Voc/MDC/PW subject saath likhe hon
+                    _p6_split = db[_p6_col].astype(str).str.split(",")
+                    _p6_flat = [v.strip() for sub in _p6_split for v in sub if v.strip()]
+                    if _p6_flat:
+                        _p6_vc = pd.Series(_p6_flat).value_counts().rename_axis(_p6_label).reset_index(name="कितने Students")
+                        st.dataframe(_p6_vc, use_container_width=True, hide_index=True)
+                    else:
+                        st.caption("कोई data भरा नहीं मिला।")
+
     with tab_users:
         st.subheader("मौजूदा Users")
         creds = st.session_state.credentials
