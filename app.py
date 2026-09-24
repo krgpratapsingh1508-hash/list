@@ -53,6 +53,13 @@ PANEL_OPTIONS = {
 
 # "Current Year" (course year) ke liye standard 5 values — "1st Year" hi asli/canonical form hai.
 COURSE_YEAR_OPTIONS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"]
+# P5 Print Header me "FIRST YEAR" jaise pooray-word, capital style me dikhane ke liye
+COURSE_YEAR_PRINT_LABELS = {
+    "1st Year": "FIRST YEAR", "2nd Year": "SECOND YEAR", "3rd Year": "THIRD YEAR",
+    "4th Year": "FOURTH YEAR", "5th Year": "FIFTH YEAR",
+}
+# P5 Print Header ke "Course" dropdown ke liye common course names
+COURSE_NAME_OPTIONS = ["B.A.", "B.Com.", "B.Sc.", "BBA", "BCA", "B.Ed.", "M.A.", "M.Com.", "M.Sc.", "LL.B.", "PGDCA"]
 # Bahut saare likhne ke tareeke (First Year, 1, I Year, Year-1, आदि) — sabko upar wali canonical form me badalne ke liye.
 _COURSE_YEAR_ALIASES = {
     "1st year": "1st Year", "first year": "1st Year", "1": "1st Year", "1st": "1st Year",
@@ -1163,7 +1170,26 @@ elif choice == "P5 — Print Panel":
 
     ph_c1, ph_c2 = st.columns(2)
     with ph_c1:
-        st.session_state.ph_course = st.text_input("Header Line 2 — Course / Class", value=st.session_state.ph_course)
+        st.markdown("**Header Line 2 — Course / Class**")
+        cc1, cc2 = st.columns(2)
+        _course_other = "✍️ अन्य (खुद लिखें)"
+        with cc1:
+            _course_all_opts = COURSE_NAME_OPTIONS + [_course_other]
+            _course_default_idx = COURSE_NAME_OPTIONS.index("B.Com.") if "B.Com." in COURSE_NAME_OPTIONS else 0
+            _course_pick = st.selectbox("Course चुनें", _course_all_opts, index=_course_default_idx, key="ph_course_pick")
+            if _course_pick == _course_other:
+                _course_val = st.text_input("Course खुद लिखें", key="ph_course_custom").strip()
+            else:
+                _course_val = _course_pick
+        with cc2:
+            _class_all_opts = COURSE_YEAR_OPTIONS + [_course_other]
+            _class_pick = st.selectbox("Class / Year चुनें", _class_all_opts, key="ph_class_pick")
+            if _class_pick == _course_other:
+                _class_val = st.text_input("Class / Year खुद लिखें", key="ph_class_custom").strip()
+            else:
+                _class_val = COURSE_YEAR_PRINT_LABELS.get(_class_pick, _class_pick)
+        st.session_state.ph_course = f"{_course_val} {_class_val}".strip()
+        st.caption(f"➡️ Course / Class Line: **{st.session_state.ph_course or '—'}**")
         # SESSION: aap se puchha jaata hai — list me se chunein (jaise 2026-27, 1999-00) ya "अन्य" me khud likhein
         _sess_other = "✍️ अन्य (खुद लिखें)"
         _sess_opts = [f"{y}-{str(y + 1)[-2:]}" for y in range(1990, 2041)] + [_sess_other]
