@@ -1071,6 +1071,7 @@ elif choice == "P5 — Print Panel":
         "ph_line1": "GOVERNMENT KAMLARAJA GIRLS POST GRADUATE (AUTO.) COLLEGE, GWALIOR",
         "ph_size1": 20, "ph_color1": "#0F2A4A",
         "ph_line2": "B.Com. FIRST YEAR (SESSION: 2025-26)",
+        "ph_course": "B.Com. FIRST YEAR",
         "ph_size2": 16, "ph_color2": "#0F2A4A",
         "ph_line3": "Mentor/Guardian Tutor List, Major Subject - Commerce",
         "ph_size3": 14, "ph_color3": "#A97A25",
@@ -1089,7 +1090,19 @@ elif choice == "P5 — Print Panel":
 
     ph_c1, ph_c2 = st.columns(2)
     with ph_c1:
-        st.session_state.ph_line2 = st.text_input("Header Line 2 (Course & Session)", value=st.session_state.ph_line2)
+        st.session_state.ph_course = st.text_input("Header Line 2 — Course / Class", value=st.session_state.ph_course)
+        # SESSION: aap se puchha jaata hai — list me se chunein (jaise 2026-27, 1999-00) ya "अन्य" me khud likhein
+        _sess_other = "✍️ अन्य (खुद लिखें)"
+        _sess_opts = [f"{y}-{str(y + 1)[-2:]}" for y in range(1990, 2041)] + [_sess_other]
+        _sess_pick = st.selectbox("SESSION कौन सा है?", _sess_opts, index=_sess_opts.index("2025-26"), key="ph_session_pick")
+        if _sess_pick == _sess_other:
+            _sess_val = st.text_input("Session खुद लिखें (जैसे 2026-27)", key="ph_session_custom").strip()
+        else:
+            _sess_val = _sess_pick
+        _course_txt = st.session_state.ph_course.strip()
+        _sess_txt = f"SESSION: {_sess_val}" if _sess_val else ""
+        st.session_state.ph_line2 = (f"{_course_txt} ({_sess_txt})" if _course_txt and _sess_txt
+                                     else (_course_txt or _sess_txt))
         s2a, s2b = st.columns(2)
         with s2a:
             st.session_state.ph_size2 = st.slider("Line 2 Font Size (px)", 8, 30, st.session_state.ph_size2)
