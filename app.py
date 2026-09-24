@@ -531,7 +531,7 @@ with st.sidebar:
     if role == "admin":
         panel_options = [
             "P1 — Entry & Upload",
-            "P2 — Approve List",
+            "P2 — List",
             "P3 — Approved List",
             "P4 — Department Panel",
             "P5 — Print Panel",
@@ -643,74 +643,32 @@ if choice == "P1 — Entry & Upload":
                     st.rerun()
 
 # ==========================================================
-# ✅ P2 — APPROVE LIST  (Admin only)
+# 📋 P2 — LIST  (Admin only)
 # ==========================================================
-elif choice == "P2 — Approve List":
-    st.header("✅ P2 — Pending List (Approve Karein)")
-    pending = db[db["Status"] == "Pending"].copy()
-    if pending.empty:
-        st.info("📭 फ़िलहाल कोई Pending entry नहीं है।")
+elif choice == "P2 — List":
+    st.header("📋 P2 — List (सभी Entries)")
+    if db.empty:
+        st.info("📭 अभी तक कोई entry नहीं है।")
     else:
-        st.caption(f"कुल {len(pending)} entries Approval का इंतज़ार कर रही हैं।")
-
-        # ---- पूरी List एक साथ Approve करें ----
-        st.markdown("### 🚀 पूरी List एक साथ Approve करें")
-        st.caption("नीचे एक Department चुनें — पूरी Pending List उसी Department को Assign होकर Approve हो जाएगी।")
-        bulk_c1, bulk_c2 = st.columns([2, 1])
-        with bulk_c1:
-            bulk_dept = st.selectbox("सभी Entries इस Department में भेजें", st.session_state.departments, key="p2_bulk_dept")
-        with bulk_c2:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            approve_all_clicked = st.button(f"✅ पूरी List ({len(pending)}) Approve करें", type="primary", use_container_width=True)
-        if approve_all_clicked:
-            for i in pending.index:
-                db.at[i, "Status"] = "Approved"
-                db.at[i, "Assigned Department"] = bulk_dept
-                db.at[i, "Approved By"] = username
-                db.at[i, "Approved On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-            save_db(db)
-            st.success(f"🎉 पूरी List ({len(pending)} entries) Approve होकर '{bulk_dept}' को भेज दी गई है।")
-            st.balloons()
-            st.rerun()
-
-        st.markdown("---")
-        st.markdown("### 🖊️ या हर Entry को अलग-अलग Department देकर Approve करें")
-        select_all = st.checkbox("☑️ सभी entries Select करें", key="p2_select_all")
-        pending.insert(0, "Select", select_all)
-        dept_options = st.session_state.departments
-        display_cols = ["Select", "Student Name", "Father Name", "Mobile Number", "Assigned Department", "Submitted By", "Submitted On"]
-        display_cols = [c for c in display_cols if c in pending.columns]
-        edited = st.data_editor(
-            pending[display_cols],
+        st.caption(f"कुल {len(db)} entries मौजूद हैं — सभी columns नीचे दिख रहे हैं।")
+        p2_search = st.text_input("🔎 किसी भी field से खोजें", key="p2_search")
+        p2_view = db.copy()
+        if p2_search.strip():
+            s = p2_search.strip().lower()
+            p2_view = p2_view[p2_view.apply(lambda r: s in " ".join(str(v).lower() for v in r.values), axis=1)]
+        st.caption(f"{len(p2_view)} entries मिलीं।")
+        st.data_editor(
+            p2_view,
             use_container_width=True,
             hide_index=True,
-            column_config={
-                "Select": st.column_config.CheckboxColumn("Select"),
-                "Assigned Department": st.column_config.SelectboxColumn("Assign to Department", options=dept_options, required=False),
-            },
-            key=f"p2_approve_editor_{select_all}",
+            column_config={"Assigned Department": st.column_config.SelectboxColumn("Assigned Department", options=st.session_state.departments, required=False)},
+            key="p2_full_list_editor",
         )
-        with st.expander("🔍 पूरी row details देखें (सभी columns)"):
-            st.dataframe(pending.drop(columns=["Select"]), use_container_width=True)
-
-        if st.button("✅ चुनी गई Entries Approve करें", type="primary"):
-            selected_idx = edited[edited["Select"] == True].index
-            if len(selected_idx) == 0:
-                st.warning("⚠️ पहले कम से कम एक entry Select करें।")
-            else:
-                missing_dept = [i for i in selected_idx if not str(edited.loc[i, "Assigned Department"]).strip()]
-                if missing_dept:
-                    st.error("❌ Approve करने से पहले हर चुनी गई entry के लिए एक Department चुनना ज़रूरी है।")
-                else:
-                    for i in selected_idx:
-                        db.at[i, "Status"] = "Approved"
-                        db.at[i, "Assigned Department"] = edited.loc[i, "Assigned Department"]
-                        db.at[i, "Approved By"] = username
-                        db.at[i, "Approved On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    save_db(db)
-                    st.success(f"🎉 {len(selected_idx)} entries Approve होकर संबंधित Department को भेज दी गई हैं।")
-                    st.balloons()
-                    st.rerun()
+        st.download_button(
+            "⬇️ पूरी List CSV Download करें",
+            p2_view.to_csv(index=False).encode("utf-8-sig"),
+            file_name="p2_full_list.csv", mime="text/csv",
+        )
 
 # ==========================================================
 # 📋 P3 — APPROVED LIST
