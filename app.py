@@ -19,6 +19,7 @@ st.set_page_config(layout="wide", page_title="Department Approval & Assignment S
 DB_FILE = "approval_workflow_database.csv"
 CRED_FILE = "approval_workflow_credentials.json"
 DEPT_FILE = "approval_workflow_departments.json"
+DEPT_CLEANUP_FLAG = "approval_workflow_dept_cleanup_done.flag"   # purani 4 default Departments ek baar hatane ka nishaan
 FACULTY_FILE = "approval_workflow_faculty.csv"
 
 # ==========================================================
@@ -131,6 +132,24 @@ def load_departments():
 def save_departments(depts):
     with open(DEPT_FILE, "w", encoding="utf-8") as f:
         json.dump(depts, f, ensure_ascii=False, indent=4)
+
+
+def remove_old_default_departments():
+    """Purani 4 default Departments (Examination/Accounts/Scholarship/Registrar) ek baar hata deta hai.
+    Baad me agar koi inhe khud dobara jode to wo hatayi nahi jaati (flag file ki wajah se)."""
+    if os.path.exists(DEPT_CLEANUP_FLAG):
+        return
+    cleaned = [d for d in st.session_state.departments if d not in OLD_DEFAULT_DEPARTMENTS]
+    if not cleaned:
+        cleaned = list(DEFAULT_DEPARTMENTS)
+    if cleaned != st.session_state.departments:
+        st.session_state.departments = cleaned
+        save_departments(cleaned)
+    try:
+        with open(DEPT_CLEANUP_FLAG, "w", encoding="utf-8") as f:
+            f.write("done")
+    except Exception:
+        pass
 
 
 # NOTE: "Department" = Allotted Class (purana naam, data na tootne ke liye); "Tutor Department" = P3 ka naya DEPARTMENT column
@@ -390,6 +409,7 @@ if "credentials" not in st.session_state:
     st.session_state.credentials = load_credentials()
 if "departments" not in st.session_state:
     st.session_state.departments = load_departments()
+remove_old_default_departments()
 
 # ==========================================================
 # 🎨 STEP 3: THEME CSS (Navy + Gold institutional theme)
