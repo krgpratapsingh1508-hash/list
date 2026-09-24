@@ -593,6 +593,8 @@ def faculty_upload_ui(key_prefix):
         for c in FACULTY_COLUMNS:
             aligned_fac[c] = fac_raw[c] if c in fac_raw.columns else ""
         aligned_fac = aligned_fac.fillna("").astype(str).reset_index(drop=True)
+        for _c in ("Mobile Number", "Number of Students"):          # Excel के "9876543210.0" जैसे मान साफ़ करें
+            aligned_fac[_c] = aligned_fac[_c].str.strip().str.replace(r"\.0$", "", regex=True)
         aligned_fac = aligned_fac[(aligned_fac["Department"].str.strip() != "") | (aligned_fac["Faculty Name"].str.strip() != "")]
         save_faculty(aligned_fac.reset_index(drop=True))
         st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
@@ -859,6 +861,7 @@ elif choice == "P3 — Guardian Tutors List":
         "NAME OF GUARDIANS TUTORS": _fac["Faculty Name"],
         "Allotted Class": _fac["Department"],
         "NUMBER OF STUDENT": _fac["Number of Students"],
+        "MOBILE NO.": _fac["Mobile Number"],
     })
     _fac_key = f"p3_fac_editor_{st.session_state.get('p3_fac_n', 0)}"
     _fac_edit = st.data_editor(
@@ -872,6 +875,7 @@ elif choice == "P3 — Guardian Tutors List":
             "NAME OF GUARDIANS TUTORS": st.column_config.TextColumn("NAME OF GUARDIANS TUTORS", width="large"),
             "Allotted Class": st.column_config.TextColumn("Allotted Class"),
             "NUMBER OF STUDENT": st.column_config.TextColumn("NUMBER OF STUDENT"),
+            "MOBILE NO.": st.column_config.TextColumn("MOBILE NO."),
         },
         key=_fac_key,
     )
@@ -891,15 +895,16 @@ elif choice == "P3 — Guardian Tutors List":
             _name = str(_r.get("NAME OF GUARDIANS TUTORS") or "").strip()
             _cls = str(_r.get("Allotted Class") or "").strip()
             _num = str(_r.get("NUMBER OF STUDENT") or "").strip()
-            if not _name and not _cls and not _num:
+            _mob = str(_r.get("MOBILE NO.") or "").strip()
+            if not _name and not _cls and not _num and not _mob:
                 continue          # पूरी खाली Row सेव नहीं होगी
-            # Designation / Mobile Number (जो यहाँ नहीं दिखते) पुरानी Row से बचाकर रखें
+            # Designation (जो यहाँ नहीं दिखता) पुरानी Row से बचाकर रखें
             _old = _fac.loc[_idx] if _idx in _fac.index else None
             _rows.append({
                 "Department": _cls,
                 "Faculty Name": _name,
                 "Designation": _old["Designation"] if _old is not None else "",
-                "Mobile Number": _old["Mobile Number"] if _old is not None else "",
+                "Mobile Number": _mob,
                 "Number of Students": _num,
             })
         save_faculty(pd.DataFrame(_rows, columns=FACULTY_COLUMNS))
@@ -999,11 +1004,35 @@ elif choice == "P5 — Print Panel":
         with s3b:
             st.session_state.ph_color3 = st.color_picker("Line 3 Color", st.session_state.ph_color3)
 
-    g_c1, g_c2 = st.columns(2)
-    with g_c1:
-        st.session_state.ph_guardian_name = st.text_input("Name of Guardian Tutor (खाली छोड़ें तो print में हाथ से लिखने की जगह खाली रहेगी)", value=st.session_state.ph_guardian_name)
-    with g_c2:
-        st.session_state.ph_guardian_mobile = st.text_input("Mobile No (Guardian Tutor)", value=st.session_state.ph_guardian_mobile)
+    # ---- Guardian Tutor: naam aur mobile P3 ki Guardian Tutors List se aate hain ----
+    _p5_fac = load_faculty().reset_index(drop=True)
+    _p5_fac = _p5_fac[_p5_fac["Faculty Name"].astype(str).str.strip() != ""]
+    _p5_blank_opt = "— खाली छोड़ें (Print में हाथ से लिखने की जगह) —"
+    _p5_opts = {}
+    for _i, _r in _p5_fac.iterrows():
+        _lbl = str(_r["Faculty Name"]).strip()
+        if str(_r["Department"]).strip():
+            _lbl += f" — {str(_r['Department']).strip()}"
+        if _lbl in _p5_opts:
+            _lbl += f" (#{_i + 1})"
+        _p5_opts[_lbl] = _r
+    _p5_choices = [_p5_blank_opt] + list(_p5_opts.keys())
+    if st.session_state.get("ph_guardian_pick") not in _p5_choices:
+        st.session_state.pop("ph_guardian_pick", None)        # List बदल गई हो तो पुरानी चॉइस हटाएँ
+    _p5_pick = st.selectbox("Guardian Tutor चुनें (P3 की List से)", _p5_choices, key="ph_guardian_pick")
+    if _p5_pick == _p5_blank_opt:
+        st.session_state.ph_guardian_name = ""
+        st.session_state.ph_guardian_mobile = ""
+        if _p5_fac.empty:
+            st.caption("📭 P3 की Guardian Tutors List अभी खाली है — पहले P3 में List जोड़ें।")
+        else:
+            st.caption("कोई Tutor नहीं चुना — Print में Name और Mobile की जगह हाथ से लिखने के लिए खाली रहेगी।")
+    else:
+        _p5_row = _p5_opts[_p5_pick]
+        st.session_state.ph_guardian_name = str(_p5_row["Faculty Name"]).strip()
+        st.session_state.ph_guardian_mobile = str(_p5_row["Mobile Number"]).strip()
+        st.caption(f"👩‍🏫 **{st.session_state.ph_guardian_name}** — 📱 "
+                   + (st.session_state.ph_guardian_mobile or "Mobile No. P3 की List में खाली है (P3 में भरें)"))
 
     _blank_line = "&nbsp;" * 22
 
