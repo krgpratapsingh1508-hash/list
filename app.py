@@ -557,6 +557,7 @@ if choice == "P1 — Entry & Upload":
     mode = st.radio("तरीका चुनें", ["✍️ Single Entry (Form)", "📤 Bulk Upload (CSV/Excel)"], horizontal=True)
 
     if mode == "✍️ Single Entry (Form)":
+        p1_single_dept = st.selectbox("Department (Approve होकर यहीं भेजी जाएगी)", st.session_state.departments, key="p1_single_dept")
         with st.form("single_entry_form"):
             st.caption("नीचे जितने columns भरने हैं भरें — बाकी खाली छोड़ सकते हैं।")
             values = {}
@@ -564,30 +565,35 @@ if choice == "P1 — Entry & Upload":
             for i, col_name in enumerate(DEFAULT_COLUMNS):
                 with cols[i % 3]:
                     values[col_name] = st.text_input(col_name, key=f"p1_field_{col_name}")
-            submit_entry = st.form_submit_button("➕ Submit for Approval", type="primary", use_container_width=True)
+            submit_entry = st.form_submit_button("✅ Submit & Approve", type="primary", use_container_width=True)
         if submit_entry:
             if not any(str(v).strip() for v in values.values()):
                 st.warning("⚠️ कृपया कम से कम एक फ़ील्ड भरें।")
             else:
                 new_row = {c: "" for c in ALL_COLUMNS}
                 new_row.update(values)
-                new_row["Status"] = "Pending"
+                new_row["Status"] = "Approved"
+                new_row["Assigned Department"] = p1_single_dept
                 new_row["Submitted By"] = username
                 new_row["Submitted On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                new_row["Approved By"] = username
+                new_row["Approved On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                 db = pd.concat([db, pd.DataFrame([new_row])], ignore_index=True)
                 save_db(db)
-                st.success("✅ Entry सफलतापूर्वक Submit हुई — अब यह P2 (Approve List) में Admin approval के लिए दिखेगी।")
+                st.success(f"🎉 Entry सफलतापूर्वक Submit होकर सीधे Approve हो गई — '{p1_single_dept}' को भेज दी गई है।")
                 st.balloons()
 
     else:
         st.info("CSV या Excel (.csv/.xlsx/.xls) फ़ाइलें अपलोड करें — एक साथ कई फ़ाइलें भी चुन सकते हैं। "
                 "मिलते-जुलते नाम वाले कॉलम (जैसे DOB, Email, Mobile No) अपने आप सही जगह मैच हो जाएंगे — बाकी खाली रहेंगे।")
 
-        oc1, oc2 = st.columns(2)
+        oc1, oc2, oc3 = st.columns(3)
         with oc1:
             p1_common_year = st.text_input("Admission Year (सभी rows पर लागू करें, वैकल्पिक)", key="p1_common_year")
         with oc2:
             p1_common_session = st.text_input("Admission Session (सभी rows पर लागू करें, वैकल्पिक)", key="p1_common_session")
+        with oc3:
+            p1_bulk_dept = st.selectbox("Department (सभी rows Approve होकर यहीं जाएंगी)", st.session_state.departments, key="p1_bulk_dept")
         st.caption("ऊपर की दो फ़ील्ड सिर्फ़ उन्हीं rows में भरी जाएंगी जहाँ फ़ाइल में यह कॉलम पहले से खाली है।")
 
         up_files = st.file_uploader("फ़ाइलें चुनें", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
@@ -618,21 +624,21 @@ if choice == "P1 — Entry & Upload":
                     aligned.loc[aligned["Admission Year"].astype(str).str.strip() == "", "Admission Year"] = p1_common_year.strip()
                 if p1_common_session.strip():
                     aligned.loc[aligned["Admission Session"].astype(str).str.strip() == "", "Admission Session"] = p1_common_session.strip()
-                aligned["Status"] = "Pending"
-                aligned["Assigned Department"] = ""
+                aligned["Status"] = "Approved"
+                aligned["Assigned Department"] = p1_bulk_dept
                 aligned["Submitted By"] = username
                 aligned["Submitted On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                aligned["Approved By"] = ""
-                aligned["Approved On"] = ""
+                aligned["Approved By"] = username
+                aligned["Approved On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                 all_new_rows.append(aligned)
 
             if all_new_rows:
                 total_rows = sum(len(a) for a in all_new_rows)
                 st.success(f"✅ कुल {len(all_new_rows)} फ़ाइलों से {total_rows} rows पढ़ ली गई हैं — नीचे बटन दबाकर पक्का जोड़ें।")
-                if st.button(f"📥 इन सभी {total_rows} Rows को Pending List में जोड़ें", type="primary"):
+                if st.button(f"📥 इन सभी {total_rows} Rows को सीधे Approve करके '{p1_bulk_dept}' में जोड़ें", type="primary"):
                     db = pd.concat([db] + all_new_rows, ignore_index=True)
                     save_db(db)
-                    st.success(f"🎉 {total_rows} rows जोड़ दी गई हैं — अब P2 में Approval के लिए उपलब्ध हैं।")
+                    st.success(f"🎉 {total_rows} rows सीधे Approve होकर '{p1_bulk_dept}' को भेज दी गई हैं।")
                     st.balloons()
                     st.rerun()
 
