@@ -893,7 +893,7 @@ elif choice == "P5 — Print Panel":
     st.subheader("📂 Data चुनें")
     d_col1, d_col2, d_col3 = st.columns([1, 1, 2])
     with d_col1:
-        status_choice = st.selectbox("Status", ["Approved", "Pending", "सभी"])
+        status_choice = st.selectbox("Status", ["सभी", "Approved", "Pending"], index=0)
     with d_col2:
         if role == "admin":
             dept_choice = st.selectbox("Department", ["सभी"] + st.session_state.departments)
@@ -905,7 +905,7 @@ elif choice == "P5 — Print Panel":
 
     pp_view = db.copy()
     if status_choice != "सभी":
-        pp_view = pp_view[pp_view["Status"] == status_choice]
+        pp_view = pp_view[pp_view["Status"].astype(str).str.strip().str.lower() == status_choice.lower()]
     if role != "admin":
         pp_view = pp_view[pp_view["Assigned Department"] == user_dept]
     elif dept_choice != "सभी":
@@ -927,6 +927,13 @@ elif choice == "P5 — Print Panel":
 
     if pp_view.empty:
         st.info("📭 चुने गए Filters से कोई record नहीं मिला।")
+        if db.empty:
+            st.warning("⚠️ Database बिल्कुल खाली है (कुल 0 records)। पहले P1 से data Upload/Entry करें — "
+                       f"या `{DB_FILE}` फ़ाइल app वाले folder में मौजूद नहीं है।")
+        else:
+            _counts = db["Status"].astype(str).replace("", "(खाली)").value_counts().to_dict()
+            st.caption(f"Database में कुल {len(db)} records हैं। Status-wise: {_counts}. "
+                       "Status को 'सभी' और Department को 'सभी' करके देखें, और Search box खाली रखें।")
     else:
         default_print_cols = [c for c in ["Unique ID", "Student Name", "Father Name", "Mobile Number"] if c in ALL_COLUMNS]
         pp_cols = st.multiselect(
