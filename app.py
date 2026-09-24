@@ -1209,7 +1209,7 @@ elif choice == "P5 — Print Panel":
             st.session_state.ph_color2 = st.color_picker("Line 2 Color", st.session_state.ph_color2)
     with ph_c2:
         st.session_state.ph_title3 = st.text_input("Header Line 3 — List Title", value=st.session_state.ph_title3)
-        st.text_input("Major Subject (खाली छोड़ें = P2 के Data के 'Subject' से अपने आप)", key="ph_major_manual")
+        st.caption("📘 Major Subject अब नीचे 'डेटा चुनें' सेक्शन के बाद चुना जाएगा — वहाँ इसी List के students के Subject से dropdown बनता है।")
         s3a, s3b = st.columns(2)
         with s3a:
             st.session_state.ph_size3 = st.slider("Line 3 Font Size (px)", 8, 30, st.session_state.ph_size3)
@@ -1300,24 +1300,36 @@ elif choice == "P5 — Print Panel":
 
     st.caption(f"कुल {len(pp_view)} records मिले।")
 
-    # ---- Header Line 3: Major Subject P2 ke data ke "Subject" column se apne aap ----
+    # ---- Header Line 3: Major Subject — isi filtered List ke students ke apne "Subject" data se (dropdown) ----
     _subj = pp_view["Subject"].astype(str).str.strip()
     _auto_subjects = list(_subj[_subj != ""].value_counts().index)
-    _manual_subject = st.session_state.get("ph_major_manual", "").strip()
-    _major = _manual_subject or ", ".join(_auto_subjects)
+    _major_auto_opt = "🔄 Auto (List में जो भी मिले)"
+    _major_other_opt = "✍️ अन्य (खुद लिखें)"
+    _major_choices = [_major_auto_opt] + _auto_subjects + [_major_other_opt]
+    if st.session_state.get("ph_major_pick") not in _major_choices:
+        st.session_state.pop("ph_major_pick", None)   # List बदल गई हो तो पुरानी चॉइस हटाएँ
+    _major_pick = st.selectbox(
+        "📘 Major Subject चुनें (इसी List के students के Subject data से)", _major_choices, key="ph_major_pick",
+    )
+    if _major_pick == _major_other_opt:
+        _major = st.text_input("Major Subject खुद लिखें", key="ph_major_manual").strip()
+    elif _major_pick == _major_auto_opt:
+        _major = ", ".join(_auto_subjects)
+    else:
+        _major = _major_pick
     _title3 = st.session_state.ph_title3.strip()
     if _title3 and _major:
         st.session_state.ph_line3 = f"{_title3}, Major Subject - {_major}"
     else:
         st.session_state.ph_line3 = _title3 or (f"Major Subject - {_major}" if _major else "")
-    if _manual_subject:
-        st.caption(f"📘 Major Subject (आपने खुद लिखा): **{_manual_subject}**")
-    elif not _auto_subjects:
-        st.warning("⚠️ इस List के records में 'Subject' खाली है, इसलिए Header में Major Subject नहीं आएगा — ऊपर Major Subject खुद भी लिख सकते हैं।")
-    elif len(_auto_subjects) > 1:
-        st.warning(f"⚠️ इस List में एक से ज़्यादा Subject हैं ({_major}). List छोटी करें (Department / Search से) या ऊपर Major Subject खुद लिखें।")
+    if _major_pick == _major_other_opt:
+        st.caption(f"📘 Major Subject (आपने खुद लिखा): **{_major or '—'}**")
+    elif _major_pick == _major_auto_opt and not _auto_subjects:
+        st.warning("⚠️ इस List के records में 'Subject' खाली है, इसलिए Header में Major Subject नहीं आएगा — ऊपर से कोई Subject चुनें या खुद लिखें।")
+    elif _major_pick == _major_auto_opt and len(_auto_subjects) > 1:
+        st.warning(f"⚠️ इस List में एक से ज़्यादा Subject हैं ({_major}). ऊपर से इनमें से कोई एक Subject चुन लें, या Department/Search से List छोटी करें।")
     else:
-        st.caption(f"📘 Major Subject (P2 के Subject से): **{_major}**")
+        st.caption(f"📘 Major Subject: **{_major}**")
 
     st.markdown(
         f"""<div style="border:1px solid var(--pg-border); border-radius:10px; padding:14px 18px;
