@@ -979,7 +979,12 @@ elif choice == "P5 — Print Panel":
             key="pp_cols",
         )
         if pp_cols:
-            pp_print_df = pp_view[pp_cols].reset_index(drop=True)
+            # Student Name A→Z (alphabetical) — khaali naam sabse neeche; phir S.No 1,2,3... us order me
+            _pp_sorted = pp_view.reset_index(drop=True)
+            _name_key = _pp_sorted["Student Name"].astype(str).str.strip().str.lower()
+            _order = pd.DataFrame({"empty": _name_key == "", "name": _name_key}).sort_values(
+                ["empty", "name"], kind="stable").index
+            pp_print_df = _pp_sorted.loc[_order, pp_cols].reset_index(drop=True)
             pp_print_df.insert(0, "S.No", range(1, len(pp_print_df) + 1))
             preview_df = pp_print_df.rename(columns=PRINT_LABEL_OVERRIDES)
 
