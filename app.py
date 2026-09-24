@@ -43,7 +43,6 @@ ALL_COLUMNS = DEFAULT_COLUMNS + SYSTEM_COLUMNS
 # P1 me har upload ke saath chuna jaata hai ki wo kin panels me dikhe (P1/P6 hamesha admin ke liye hain)
 PANEL_OPTIONS = {
     "P2": "P2 — List",
-    "P3": "P3 — Approved List",
     "P4": "P4 — Department Panel",
     "P5": "P5 — Print Panel",
 }
@@ -545,6 +544,63 @@ def print_button(body_html, label="🖨️ Print करें", height=52):
 
 
 # ==========================================================
+# 👩‍🏫 GUARDIAN TUTORS LIST UPLOAD (P3 aur P4 dono me use hota hai)
+# ==========================================================
+def faculty_upload_ui(key_prefix):
+    st.caption("Excel/CSV फ़ाइल अपलोड करें जिसमें 'Allotted Class' (या 'Department') और 'Name of Guardians Tutors' "
+               "(या 'Faculty Name') कॉलम हों — जैसे 'LIST OF GUARDIANS TUTORS' शीट में होता है "
+               "(S.N., Name of Guardians Tutors, Allotted Class, Number of Student)। "
+               "Designation, Mobile Number वैकल्पिक हैं। ⚠️ नई फ़ाइल पुरानी List को replace कर देगी।")
+    fac_file = st.file_uploader("Guardian Tutors List फ़ाइल चुनें", type=["csv", "xlsx", "xls"], key=f"{key_prefix}_fac_upload")
+    if fac_file is None:
+        return
+    try:
+        fac_raw = read_uploaded_table(fac_file)
+    except Exception as e:
+        st.error(f"❌ फ़ाइल पढ़ने में समस्या: {e}")
+        return
+    if fac_raw.empty:
+        st.error("❌ फ़ाइल में कोई मान्य डेटा नहीं मिला।")
+        return
+
+    fac_rename = {}
+    for col in fac_raw.columns:
+        key = re.sub(r"[^a-z0-9]", "", str(col).strip().lower())
+        if key in ("department", "dept", "departmentname", "allottedclass", "class", "allottedclassname"):
+            fac_rename[col] = "Department"
+        elif key in ("facultyname", "faculty", "teachername", "mentorname", "tutorname", "guardiantutorname",
+                     "nameofguardianstutors", "nameofguardiantutor", "guardianstutors", "guardiantutors",
+                     "nameofguardian", "nameofguardianstutor", "guardiantutor", "nameofguardiantutors"):
+            fac_rename[col] = "Faculty Name"
+        elif key in ("designation", "post", "role"):
+            fac_rename[col] = "Designation"
+        elif key in ("mobilenumber", "mobileno", "mobile", "phone", "phonenumber", "contactno", "mobno"):
+            fac_rename[col] = "Mobile Number"
+        elif key in ("numberofstudent", "numberofstudents", "totalstudents", "studentcount", "noofstudents",
+                     "nostudents", "noofstudent"):
+            fac_rename[col] = "Number of Students"
+    fac_raw = fac_raw.rename(columns=fac_rename)
+
+    if "Department" not in fac_raw.columns or "Faculty Name" not in fac_raw.columns:
+        st.error("❌ फ़ाइल में 'Allotted Class' (या 'Department') और 'Name of Guardians Tutors' "
+                 "(या 'Faculty Name') — ये दोनों कॉलम ज़रूर होने चाहिए। "
+                 f"फ़ाइल के columns: {', '.join(map(str, fac_raw.columns))}")
+        return
+
+    st.dataframe(fac_raw.head(20), use_container_width=True)
+    if st.button("💾 यह List Save करें", type="primary", key=f"{key_prefix}_fac_save_upload"):
+        aligned_fac = pd.DataFrame(index=fac_raw.index)
+        for c in FACULTY_COLUMNS:
+            aligned_fac[c] = fac_raw[c] if c in fac_raw.columns else ""
+        aligned_fac = aligned_fac.fillna("").astype(str).reset_index(drop=True)
+        aligned_fac = aligned_fac[(aligned_fac["Department"].str.strip() != "") | (aligned_fac["Faculty Name"].str.strip() != "")]
+        save_faculty(aligned_fac.reset_index(drop=True))
+        st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
+        st.session_state["p3_fac_flash"] = f"✅ {len(aligned_fac)} Guardian Tutors की List Save हो गई है।"
+        st.rerun()
+
+
+# ==========================================================
 # 🛑 STEP 4: LOGIN GATEWAY
 # ==========================================================
 if st.session_state.user_role is None:
@@ -602,7 +658,7 @@ with st.sidebar:
         panel_options = [
             "P1 — Entry & Upload",
             "P2 — List",
-            "P3 — Approved List",
+            "P3 — Guardian Tutors List",
             "P4 — Department Panel",
             "P5 — Print Panel",
             "P6 — Admin Panel",
@@ -779,119 +835,77 @@ elif choice == "P2 — List":
         )
 
 # ==========================================================
-# 📋 P3 — APPROVED LIST
+# 👩‍🏫 P3 — GUARDIAN TUTORS LIST  (Admin only)
 # ==========================================================
-elif choice == "P3 — Approved List":
-    st.header("📋 P3 — Approved List (सभी Departments)")
-    tab_p3_list, tab_p3_fac = st.tabs(["📋 Approved List", "👩‍🏫 Guardian Tutors List"])
-    with tab_p3_list:
-        _p3_rows = filter_for_panel(db, "P3")
-        approved = _p3_rows[_p3_rows["Status"] == "Approved"].copy()
-        if approved.empty:
-            st.info("📭 P3 में दिखाने के लिए अभी कोई Approved entry नहीं है।")
-            if db.empty:
-                st.warning(f"⚠️ Database खाली है (0 records) — `{DB_FILE}` में कोई data save नहीं हुआ। P1 से List जोड़ने के बाद बटन दबाना ज़रूरी है।")
-            else:
-                _not_p3 = len(db) - len(_p3_rows)
-                st.caption(f"Database में कुल {len(db)} records हैं; इनमें से {_not_p3} records P1 में P3 के लिए tick नहीं किए गए थे।")
-        else:
-            f_col1, f_col2 = st.columns([1, 2])
-            with f_col1:
-                dept_filter = st.selectbox("Department से फ़िल्टर करें", ["सभी"] + st.session_state.departments)
-            with f_col2:
-                search = st.text_input("🔎 Student Name / Roll No. / Unique ID से खोजें")
+elif choice == "P3 — Guardian Tutors List":
+    st.header("👩‍🏫 P3 — Guardian Tutors List")
+    _fac_flash = st.session_state.pop("p3_fac_flash", None)
+    if _fac_flash:
+        st.success(_fac_flash)
 
-            view = approved.copy()
-            if dept_filter != "सभी":
-                view = view[view["Assigned Department"] == dept_filter]
-            if search.strip():
-                s = search.strip().lower()
-                mask = view.apply(lambda r: s in " ".join(str(v).lower() for v in r.values), axis=1)
-                view = view[mask]
+    _fac = load_faculty().reset_index(drop=True)
 
-            st.caption(f"कुल {len(view)} Approved records मिले।")
-            st.dataframe(view, use_container_width=True, hide_index=True)
+    with st.expander("📤 फ़ाइल से List अपलोड करें (Excel / CSV)", expanded=_fac.empty):
+        faculty_upload_ui("p3")
 
-            st.markdown("---")
-            st.subheader("🖨️ Export / Print")
-            chosen_cols = st.multiselect("Print/Export के लिए Columns चुनें", ALL_COLUMNS,
-                                          default=["Student Name", "Father Name", "Roll No.", "Subject", "Assigned Department", "Status"])
-            if chosen_cols:
-                print_df = view[chosen_cols]
-                d_col1, d_col2 = st.columns(2)
-                with d_col1:
-                    st.download_button("⬇️ CSV Download करें", print_df.to_csv(index=False).encode("utf-8-sig"),
-                                        file_name="approved_list.csv", mime="text/csv", use_container_width=True)
-                with d_col2:
-                    if st.button("🖨️ Print View तैयार करें", use_container_width=True):
-                        table_html = print_df.to_html(index=False, escape=True)
-                        st.markdown(f'<div class="print-only-container">{table_html}</div>', unsafe_allow_html=True)
-                        st.info("Print view नीचे तैयार है — अब Browser से Ctrl+P / Cmd+P दबाएँ (सिर्फ़ यह टेबल print होगी)।")
-                        st.markdown(f'<div class="print-hide">{print_df.to_html(index=False, escape=True)}</div>', unsafe_allow_html=True)
+    st.caption("यहाँ से आप Text बदल सकते हैं, नई Row जोड़ सकते हैं (टेबल के नीचे ➕) और Row हटा सकते हैं "
+               "(Row चुनकर 🗑️)। बदलाव के बाद **💾 Save Changes** ज़रूर दबाएँ। "
+               "'Allotted Class' का नाम वही रखें जो P4 में Department का नाम है, ताकि P4 में यह Tutor सही जगह दिखे।")
+    if _fac.empty:
+        st.info("📭 अभी List खाली है — ऊपर से फ़ाइल अपलोड करें, या नीचे टेबल में ➕ से Row जोड़ें।")
 
-    with tab_p3_fac:
-        st.subheader("👩‍🏫 Guardian Tutors List")
-        _fac_flash = st.session_state.pop("p3_fac_flash", None)
-        if _fac_flash:
-            st.success(_fac_flash)
-        st.caption("यहाँ से आप Text बदल सकते हैं, नई Row जोड़ सकते हैं (टेबल के नीचे ➕) और Row हटा सकते हैं "
-                   "(Row चुनकर 🗑️)। बदलाव के बाद **💾 Save Changes** ज़रूर दबाएँ। "
-                   "'Allotted Class' का नाम वही रखें जो P4 में Department का नाम है, ताकि P4 में यह Tutor सही जगह दिखे।")
+    _fac_view = pd.DataFrame({
+        "S.N.": range(1, len(_fac) + 1),
+        "NAME OF GUARDIANS TUTORS": _fac["Faculty Name"],
+        "Allotted Class": _fac["Department"],
+        "NUMBER OF STUDENT": _fac["Number of Students"],
+    })
+    _fac_key = f"p3_fac_editor_{st.session_state.get('p3_fac_n', 0)}"
+    _fac_edit = st.data_editor(
+        _fac_view,
+        num_rows="dynamic",
+        use_container_width=True,
+        hide_index=True,
+        disabled=["S.N."],
+        column_config={
+            "S.N.": st.column_config.NumberColumn("S.N.", width="small"),
+            "NAME OF GUARDIANS TUTORS": st.column_config.TextColumn("NAME OF GUARDIANS TUTORS", width="large"),
+            "Allotted Class": st.column_config.TextColumn("Allotted Class"),
+            "NUMBER OF STUDENT": st.column_config.TextColumn("NUMBER OF STUDENT"),
+        },
+        key=_fac_key,
+    )
 
-        _fac = load_faculty().reset_index(drop=True)
-        _fac_view = pd.DataFrame({
-            "S.N.": range(1, len(_fac) + 1),
-            "NAME OF GUARDIANS TUTORS": _fac["Faculty Name"],
-            "Allotted Class": _fac["Department"],
-            "NUMBER OF STUDENT": _fac["Number of Students"],
-        })
-        _fac_key = f"p3_fac_editor_{st.session_state.get('p3_fac_n', 0)}"
-        _fac_edit = st.data_editor(
-            _fac_view,
-            num_rows="dynamic",
-            use_container_width=True,
-            hide_index=True,
-            disabled=["S.N."],
-            column_config={
-                "S.N.": st.column_config.NumberColumn("S.N.", width="small"),
-                "NAME OF GUARDIANS TUTORS": st.column_config.TextColumn("NAME OF GUARDIANS TUTORS", width="large"),
-                "Allotted Class": st.column_config.TextColumn("Allotted Class"),
-                "NUMBER OF STUDENT": st.column_config.TextColumn("NUMBER OF STUDENT"),
-            },
-            key=_fac_key,
-        )
+    _fac_c1, _fac_c2 = st.columns(2)
+    with _fac_c1:
+        _save_fac = st.button("💾 Save Changes", type="primary", use_container_width=True, key="p3_fac_save")
+    with _fac_c2:
+        _dl = _fac_edit.reset_index(drop=True).copy()
+        _dl["S.N."] = range(1, len(_dl) + 1)
+        st.download_button("⬇️ CSV Download करें", _dl.to_csv(index=False).encode("utf-8-sig"),
+                           file_name="guardian_tutors_list.csv", mime="text/csv", use_container_width=True)
 
-        _fac_c1, _fac_c2 = st.columns(2)
-        with _fac_c1:
-            _save_fac = st.button("💾 Save Changes", type="primary", use_container_width=True, key="p3_fac_save")
-        with _fac_c2:
-            _dl = _fac_edit.reset_index(drop=True).copy()
-            _dl["S.N."] = range(1, len(_dl) + 1)
-            st.download_button("⬇️ CSV Download करें", _dl.to_csv(index=False).encode("utf-8-sig"),
-                               file_name="guardian_tutors_list.csv", mime="text/csv", use_container_width=True)
-
-        if _save_fac:
-            _rows = []
-            for _idx, _r in _fac_edit.iterrows():
-                _name = str(_r.get("NAME OF GUARDIANS TUTORS") or "").strip()
-                _cls = str(_r.get("Allotted Class") or "").strip()
-                _num = str(_r.get("NUMBER OF STUDENT") or "").strip()
-                if not _name and not _cls and not _num:
-                    continue          # पूरी खाली Row सेव नहीं होगी
-                # Designation / Mobile Number (जो यहाँ नहीं दिखते) पुरानी Row से बचाकर रखें
-                _old = _fac.loc[_idx] if _idx in _fac.index else None
-                _rows.append({
-                    "Department": _cls,
-                    "Faculty Name": _name,
-                    "Designation": _old["Designation"] if _old is not None else "",
-                    "Mobile Number": _old["Mobile Number"] if _old is not None else "",
-                    "Number of Students": _num,
-                })
-            save_faculty(pd.DataFrame(_rows, columns=FACULTY_COLUMNS))
-            st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
-            st.session_state["p3_fac_flash"] = f"✅ Guardian Tutors List Save हो गई — कुल {len(_rows)} Rows।"
-            st.rerun()
-
+    if _save_fac:
+        _rows = []
+        for _idx, _r in _fac_edit.iterrows():
+            _name = str(_r.get("NAME OF GUARDIANS TUTORS") or "").strip()
+            _cls = str(_r.get("Allotted Class") or "").strip()
+            _num = str(_r.get("NUMBER OF STUDENT") or "").strip()
+            if not _name and not _cls and not _num:
+                continue          # पूरी खाली Row सेव नहीं होगी
+            # Designation / Mobile Number (जो यहाँ नहीं दिखते) पुरानी Row से बचाकर रखें
+            _old = _fac.loc[_idx] if _idx in _fac.index else None
+            _rows.append({
+                "Department": _cls,
+                "Faculty Name": _name,
+                "Designation": _old["Designation"] if _old is not None else "",
+                "Mobile Number": _old["Mobile Number"] if _old is not None else "",
+                "Number of Students": _num,
+            })
+        save_faculty(pd.DataFrame(_rows, columns=FACULTY_COLUMNS))
+        st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
+        st.session_state["p3_fac_flash"] = f"✅ Guardian Tutors List Save हो गई — कुल {len(_rows)} Rows।"
+        st.rerun()
 
 # ==========================================================
 # 🏢 P4 — DEPARTMENT PANEL
@@ -904,55 +918,7 @@ elif choice in ("P4 — Department Panel", "P4 — My Department List"):
 
     if role == "admin":
         with st.expander("📤 Department – Faculty Mapping अपलोड/अपडेट करें"):
-            st.caption("Excel/CSV फ़ाइल अपलोड करें जिसमें 'Department' (या 'Allotted Class') और 'Faculty Name' "
-                       "(या 'Name of Guardians Tutors') कॉलम हों — जैसे 'LIST OF GUARDIANS TUTORS' शीट में होता है "
-                       "(S.N., Name of Guardians Tutors, Allotted Class, Number of Student)। "
-                       "Designation, Mobile Number वैकल्पिक हैं। नई फ़ाइल पुरानी mapping को replace कर देगी।")
-            fac_file = st.file_uploader("Faculty List फ़ाइल चुनें", type=["csv", "xlsx", "xls"], key="fac_upload")
-            if fac_file is not None:
-                try:
-                    fac_raw = read_uploaded_table(fac_file)
-                except Exception as e:
-                    st.error(f"❌ फ़ाइल पढ़ने में समस्या: {e}")
-                    fac_raw = pd.DataFrame()
-
-                if not fac_raw.empty:
-                    fac_rename = {}
-                    for col in fac_raw.columns:
-                        key = re.sub(r"[^a-z0-9]", "", str(col).strip().lower())
-                        if key in ("department", "dept", "departmentname", "allottedclass",
-                                   "class", "allottedclassname"):
-                            fac_rename[col] = "Department"
-                        elif key in ("facultyname", "faculty", "teachername", "mentorname",
-                                     "tutorname", "guardiantutorname", "nameofguardianstutors",
-                                     "nameofguardiantutor", "guardianstutors", "guardiantutors",
-                                     "nameofguardian"):
-                            fac_rename[col] = "Faculty Name"
-                        elif key in ("designation", "post", "role"):
-                            fac_rename[col] = "Designation"
-                        elif key in ("mobilenumber", "mobileno", "mobile", "phone",
-                                     "phonenumber", "contactno"):
-                            fac_rename[col] = "Mobile Number"
-                        elif key in ("numberofstudent", "numberofstudents", "totalstudents",
-                                     "studentcount", "noofstudents", "nostudents"):
-                            fac_rename[col] = "Number of Students"
-                    fac_raw = fac_raw.rename(columns=fac_rename)
-
-                    if "Department" not in fac_raw.columns or "Faculty Name" not in fac_raw.columns:
-                        st.error("❌ फ़ाइल में 'Department' (या 'Allotted Class') और 'Faculty Name' "
-                                 "(या 'Name of Guardians Tutors') — ये दोनों कॉलम ज़रूर होने चाहिए।")
-                    else:
-                        st.dataframe(fac_raw.head(20), use_container_width=True)
-                        if st.button("💾 Faculty Mapping Save करें", type="primary"):
-                            aligned_fac = pd.DataFrame(columns=FACULTY_COLUMNS)
-                            for c in FACULTY_COLUMNS:
-                                aligned_fac[c] = fac_raw[c] if c in fac_raw.columns else ""
-                            aligned_fac = aligned_fac[aligned_fac["Department"].astype(str).str.strip() != ""]
-                            save_faculty(aligned_fac)
-                            st.success(f"✅ {len(aligned_fac)} Faculty entries save हो गई हैं।")
-                            st.rerun()
-                elif fac_file is not None:
-                    st.error("❌ फ़ाइल में कोई मान्य डेटा नहीं मिला।")
+            faculty_upload_ui("p4")
 
             if not faculty_db.empty:
                 st.markdown("**मौजूदा Faculty Mapping:**")
