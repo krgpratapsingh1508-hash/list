@@ -1298,38 +1298,73 @@ elif choice == "P5 — Print Panel":
         s = pp_search.strip().lower()
         pp_view = pp_view[pp_view.apply(lambda r: s in " ".join(str(v).lower() for v in r.values), axis=1)]
 
+    # ---- Subject Type: Major / Minor / Vocational / MDC / PW-AP-CE me se kis ki list print karni hai ----
+    st.markdown("**📚 किस Subject-wise List Print करनी है? (Major / Minor / Vocational / MDC / PW-AP-CE)**")
+    _subject_type_map = {
+        "Major Subject": "Subject",
+        "Minor Subjects": "Minor Subjects",
+        "Vocational Subjects": "Vocational Subjects",
+        "MDC Subjects": "MDC Subjects",
+        "PW/Ap/CE Subjects": "PW/Ap/CE Subjects",
+    }
+    sub_c1, sub_c2 = st.columns(2)
+    with sub_c1:
+        _subject_type_pick = st.selectbox("Subject Type", list(_subject_type_map.keys()), key="pp_subject_type")
+    _subject_col = _subject_type_map[_subject_type_pick]
+    _sub_flat_opts = (
+        sorted({v.strip() for sub in pp_view[_subject_col].astype(str).str.split(",") for v in sub if v.strip()})
+        if _subject_col in pp_view.columns else []
+    )
+    with sub_c2:
+        _subject_val_all = "सभी"
+        _subject_val_choices = [_subject_val_all] + _sub_flat_opts
+        if st.session_state.get("pp_subject_val") not in _subject_val_choices:
+            st.session_state.pop("pp_subject_val", None)     # Subject Type बदलते ही पुरानी चॉइस reset
+        _subject_val_pick = st.selectbox(f"{_subject_type_pick} चुनें", _subject_val_choices, key="pp_subject_val")
+    if _subject_val_pick != _subject_val_all:
+        pp_view = pp_view[
+            pp_view[_subject_col].astype(str).str.split(",").apply(
+                lambda lst: any(v.strip() == _subject_val_pick for v in lst)
+            )
+        ]
+        st.caption(f"✅ सिर्फ़ वही students जिनका **{_subject_type_pick} = {_subject_val_pick}** है, List में हैं।")
+
     st.caption(f"कुल {len(pp_view)} records मिले।")
 
-    # ---- Header Line 3: Major Subject — isi filtered List ke students ke apne "Subject" data se (dropdown) ----
-    _subj = pp_view["Subject"].astype(str).str.strip()
-    _auto_subjects = list(_subj[_subj != ""].value_counts().index)
+    # ---- Header Line 3: चुने गए Subject Type (Major/Minor/Vocational/MDC/PW-AP-CE) — isi filtered List ke data se (dropdown) ----
+    _flat_all = (
+        [v.strip() for sub in pp_view[_subject_col].astype(str).str.split(",") for v in sub if v.strip()]
+        if _subject_col in pp_view.columns else []
+    )
+    _auto_subjects = list(pd.Series(_flat_all).value_counts().index) if _flat_all else []
     _major_auto_opt = "🔄 Auto (List में जो भी मिले)"
     _major_other_opt = "✍️ अन्य (खुद लिखें)"
     _major_choices = [_major_auto_opt] + _auto_subjects + [_major_other_opt]
     if st.session_state.get("ph_major_pick") not in _major_choices:
         st.session_state.pop("ph_major_pick", None)   # List बदल गई हो तो पुरानी चॉइस हटाएँ
     _major_pick = st.selectbox(
-        "📘 Major Subject चुनें (इसी List के students के Subject data से)", _major_choices, key="ph_major_pick",
+        f"📘 {_subject_type_pick} चुनें (इसी List के students के data से) — Header में यही Print होगा",
+        _major_choices, key="ph_major_pick",
     )
     if _major_pick == _major_other_opt:
-        _major = st.text_input("Major Subject खुद लिखें", key="ph_major_manual").strip()
+        _major = st.text_input(f"{_subject_type_pick} खुद लिखें", key="ph_major_manual").strip()
     elif _major_pick == _major_auto_opt:
         _major = ", ".join(_auto_subjects)
     else:
         _major = _major_pick
     _title3 = st.session_state.ph_title3.strip()
     if _title3 and _major:
-        st.session_state.ph_line3 = f"{_title3}, Major Subject - {_major}"
+        st.session_state.ph_line3 = f"{_title3}, {_subject_type_pick} - {_major}"
     else:
-        st.session_state.ph_line3 = _title3 or (f"Major Subject - {_major}" if _major else "")
+        st.session_state.ph_line3 = _title3 or (f"{_subject_type_pick} - {_major}" if _major else "")
     if _major_pick == _major_other_opt:
-        st.caption(f"📘 Major Subject (आपने खुद लिखा): **{_major or '—'}**")
+        st.caption(f"📘 {_subject_type_pick} (आपने खुद लिखा): **{_major or '—'}**")
     elif _major_pick == _major_auto_opt and not _auto_subjects:
-        st.warning("⚠️ इस List के records में 'Subject' खाली है, इसलिए Header में Major Subject नहीं आएगा — ऊपर से कोई Subject चुनें या खुद लिखें।")
+        st.warning(f"⚠️ इस List के records में '{_subject_type_pick}' खाली है, इसलिए Header में यह नहीं आएगा — ऊपर से कोई Subject चुनें या खुद लिखें।")
     elif _major_pick == _major_auto_opt and len(_auto_subjects) > 1:
-        st.warning(f"⚠️ इस List में एक से ज़्यादा Subject हैं ({_major}). ऊपर से इनमें से कोई एक Subject चुन लें, या Department/Search से List छोटी करें।")
+        st.warning(f"⚠️ इस List में एक से ज़्यादा {_subject_type_pick} हैं ({_major}). ऊपर '{_subject_type_pick} चुनें' dropdown से List छोटी करें, या यहीं से कोई एक चुन लें।")
     else:
-        st.caption(f"📘 Major Subject: **{_major}**")
+        st.caption(f"📘 {_subject_type_pick}: **{_major}**")
 
     st.markdown(
         f"""<div style="border:1px solid var(--pg-border); border-radius:10px; padding:14px 18px;
