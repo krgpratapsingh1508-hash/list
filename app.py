@@ -917,7 +917,13 @@ elif choice == "P5 — Print Panel":
     st.caption(f"कुल {len(pp_view)} records मिले।")
 
     # प्रिंट में दिखने वाले कॉलम-लेबल (असली internal column names वही रहते हैं)
-    PRINT_LABEL_OVERRIDES = {"Student Name": "Full Name", "Mobile Number": "Mob. No."}
+    PRINT_LABEL_OVERRIDES = {
+        "S.No": "S.No.",
+        "Unique ID": "Unique Id",
+        "Student Name": "Full Name",
+        "Father Name": "Father Name",
+        "Mobile Number": "Mob. No.",
+    }
 
     if pp_view.empty:
         st.info("📭 चुने गए Filters से कोई record नहीं मिला।")
