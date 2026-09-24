@@ -19,7 +19,7 @@ st.set_page_config(layout="wide", page_title="Department Approval & Assignment S
 DB_FILE = "approval_workflow_database.csv"
 CRED_FILE = "approval_workflow_credentials.json"
 DEPT_FILE = "approval_workflow_departments.json"
-DEPT_CLEANUP_FLAG = "approval_workflow_dept_cleanup_done.flag"   # purani 4 default Departments ek baar hatane ka nishaan
+DEPT_CLEANUP_FLAG = "approval_workflow_dept_cleanup_done_v2.flag"   # purani 4 Departments hatane + 23 asli Departments jodne ka (ek baar ka) nishaan
 FACULTY_FILE = "approval_workflow_faculty.csv"
 
 # ==========================================================
@@ -135,25 +135,20 @@ def save_departments(depts):
 
 
 def remove_old_default_departments():
-    """Purani 4 default Departments (Examination/Accounts/Scholarship/Registrar) ek baar hata deta hai.
-    Baad me agar koi inhe khud dobara jode to wo hatayi nahi jaati (flag file ki wajah se)."""
+    """Ek baar: purani 4 default Departments hatata hai aur 23 asli Departments (DEFAULT_DEPARTMENTS) pakka jodta hai.
+    Aapki khud jodi hui baaki Departments bachi rehti hain. Baad me kuch bhi badlo to ye dobara nahi chalta (flag file)."""
     if os.path.exists(DEPT_CLEANUP_FLAG):
         return
-    cleaned = [d for d in st.session_state.departments if d not in OLD_DEFAULT_DEPARTMENTS]
-    if not cleaned:
-        cleaned = list(DEFAULT_DEPARTMENTS)
-    if cleaned != st.session_state.departments:
-        st.session_state.departments = cleaned
-        save_departments(cleaned)
+    kept = [d for d in st.session_state.departments if d not in OLD_DEFAULT_DEPARTMENTS]
+    final = list(DEFAULT_DEPARTMENTS) + [d for d in kept if d not in DEFAULT_DEPARTMENTS]
+    if final != st.session_state.departments:
+        st.session_state.departments = final
+        save_departments(final)
     try:
         with open(DEPT_CLEANUP_FLAG, "w", encoding="utf-8") as f:
             f.write("done")
     except Exception:
         pass
-
-
-# NOTE: "Department" = Allotted Class (purana naam, data na tootne ke liye); "Tutor Department" = P3 ka naya DEPARTMENT column
-FACULTY_COLUMNS = ["Department", "Faculty Name", "Designation", "Mobile Number", "Number of Students", "Tutor Department"]
 
 
 def load_faculty():
