@@ -859,11 +859,11 @@ elif choice == "P3 — Guardian Tutors List":
     _fac_view = pd.DataFrame({
         "S.N.": range(1, len(_fac) + 1),
         "NAME OF GUARDIANS TUTORS": _fac["Faculty Name"],
+        "MOBILE NO.": _fac["Mobile Number"],
         "Allotted Class": _fac["Department"],
         "NUMBER OF STUDENT": _fac["Number of Students"],
-        "MOBILE NO.": _fac["Mobile Number"],
     })
-    _fac_key = f"p3_fac_editor_v2_{st.session_state.get('p3_fac_n', 0)}"      # v2: Mobile column ke saath
+    _fac_key = f"p3_fac_editor_v3_{st.session_state.get('p3_fac_n', 0)}"      # v3: column order badalne par naya key
     _fac_edit = st.data_editor(
         _fac_view,
         num_rows="dynamic",
@@ -873,9 +873,9 @@ elif choice == "P3 — Guardian Tutors List":
         column_config={
             "S.N.": st.column_config.NumberColumn("S.N.", width="small"),
             "NAME OF GUARDIANS TUTORS": st.column_config.TextColumn("NAME OF GUARDIANS TUTORS", width="large"),
+            "MOBILE NO.": st.column_config.TextColumn("MOBILE NO."),
             "Allotted Class": st.column_config.TextColumn("Allotted Class"),
             "NUMBER OF STUDENT": st.column_config.TextColumn("NUMBER OF STUDENT"),
-            "MOBILE NO.": st.column_config.TextColumn("MOBILE NO."),
         },
         key=_fac_key,
     )
