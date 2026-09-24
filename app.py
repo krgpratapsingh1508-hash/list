@@ -62,8 +62,12 @@ def load_db():
     if os.path.exists(DB_FILE):
         try:
             df = pd.read_csv(DB_FILE, dtype=str).fillna("")
-        except Exception:
+        except pd.errors.EmptyDataError:
             df = pd.DataFrame(columns=ALL_COLUMNS)
+        except Exception as e:
+            st.error(f"❌ Database फ़ाइल `{DB_FILE}` पढ़ी नहीं जा सकी: {e}. "
+                     "फ़ाइल को Excel/किसी दूसरे program में बंद करें या ठीक करें — तब तक app रुकी रहेगी ताकि पुराना data overwrite न हो।")
+            st.stop()
     else:
         df = pd.DataFrame(columns=ALL_COLUMNS)
     for c in ALL_COLUMNS:
@@ -323,6 +327,17 @@ MANUAL_COLUMN_ALIASES = {
     "admissionsession": "Admission Session", "subjectcode": "Subject Code",
     "currentyear": "Current Year", "admissioncategory": "Admission Category",
     "paymentdate": "Payment Date",
+    # आम तौर पर मिलने वाले दूसरे header-नाम
+    "fullname": "Student Name", "nameofstudent": "Student Name", "nameofthestudent": "Student Name",
+    "studentsname": "Student Name", "candidatename": "Student Name", "nameofcandidate": "Student Name",
+    "studentfullname": "Student Name", "applicantname": "Student Name",
+    "fathersname": "Father Name", "nameoffather": "Father Name", "fathername": "Father Name",
+    "mothersname": "Mother Name", "nameofmother": "Mother Name",
+    "mobno": "Mobile Number", "mobnumber": "Mobile Number", "mobilenum": "Mobile Number",
+    "contactnumber": "Mobile Number", "phoneno": "Mobile Number", "contact": "Mobile Number",
+    "mobilenumber1": "Mobile Number", "studentmobileno": "Mobile Number", "studentmobile": "Mobile Number",
+    "uid": "Unique ID", "uniqueno": "Unique ID", "uniqueidno": "Unique ID",
+    "rollnumber": "Roll No.", "rno": "Roll No.",
 }
 
 
@@ -696,9 +711,18 @@ if choice == "P1 — Entry & Upload":
                 with st.expander(f"👁️ '{up_file.name}' — {raw_df.shape[0]} rows, {raw_df.shape[1]} columns (Preview)"):
                     st.dataframe(raw_df.head(20), use_container_width=True)
 
-                aligned = pd.DataFrame(columns=ALL_COLUMNS)
+                _matched = [c for c in DEFAULT_COLUMNS if c in raw_df.columns]
+                _ignored = [str(c) for c in raw_df.columns if c not in DEFAULT_COLUMNS]
+                if not _matched:
+                    st.error(f"❌ '{up_file.name}' का कोई भी column पहचाना नहीं गया, इसलिए यह फ़ाइल नहीं जोड़ी जाएगी। "
+                             f"फ़ाइल के columns: {', '.join(map(str, raw_df.columns))}")
+                    continue
+                st.caption(f"✅ '{up_file.name}' — पहचाने गए columns: {', '.join(_matched)}"
+                           + (f"  |  ⚠️ पहचाने नहीं गए (छोड़ दिए जाएंगे): {', '.join(_ignored)}" if _ignored else ""))
+                aligned = pd.DataFrame(index=raw_df.index)
                 for c in DEFAULT_COLUMNS:
                     aligned[c] = raw_df[c] if c in raw_df.columns else ""
+                aligned = aligned.reindex(columns=ALL_COLUMNS).fillna("").reset_index(drop=True)
                 if p1_common_year.strip():
                     aligned.loc[aligned["Admission Year"].astype(str).str.strip() == "", "Admission Year"] = p1_common_year.strip()
                 if p1_common_session.strip():
