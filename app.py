@@ -612,11 +612,14 @@ if choice == "P1 — Entry & Upload":
     mode = st.radio("तरीका चुनें", ["✍️ Single Entry (Form)", "📤 Bulk Upload (CSV/Excel)"], horizontal=True)
 
     if mode == "✍️ Single Entry (Form)":
-        p1_single_dept = st.selectbox("Department (Approve होकर यहीं भेजी जाएगी)", st.session_state.departments, key="p1_single_dept")
         p1_single_panels = st.multiselect(
             "यह Entry किन Panels में दिखे?", list(PANEL_OPTIONS.keys()), default=list(PANEL_OPTIONS.keys()),
             format_func=lambda k: PANEL_OPTIONS[k], key="p1_single_panels",
         )
+        if "P4" in p1_single_panels:
+            p1_single_dept = st.selectbox("P4 के लिए Department (Approve होकर यहीं भेजी जाएगी)", st.session_state.departments, key="p1_single_dept")
+        else:
+            p1_single_dept = ""
         with st.form("single_entry_form"):
             st.caption("नीचे जितने columns भरने हैं भरें — बाकी खाली छोड़ सकते हैं।")
             values = {}
@@ -642,7 +645,8 @@ if choice == "P1 — Entry & Upload":
                 new_row["Approved On"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                 db = pd.concat([db, pd.DataFrame([new_row])], ignore_index=True)
                 save_db(db)
-                st.success(f"🎉 Entry सफलतापूर्वक Submit होकर सीधे Approve हो गई — '{p1_single_dept}' को भेज दी गई है।")
+                st.success("🎉 Entry सफलतापूर्वक Submit होकर सीधे Approve हो गई — "
+                           f"{', '.join(p1_single_panels)} में दिखेगी" + (f" (Department: '{p1_single_dept}')।" if p1_single_dept else "।"))
                 st.balloons()
 
     else:
@@ -655,14 +659,17 @@ if choice == "P1 — Entry & Upload":
         with oc2:
             p1_common_session = st.text_input("Admission Session (सभी rows पर लागू करें, वैकल्पिक)", key="p1_common_session")
         with oc3:
-            p1_bulk_dept = st.selectbox("Department (सभी rows Approve होकर यहीं जाएंगी)", st.session_state.departments, key="p1_bulk_dept")
-        st.caption("ऊपर की दो फ़ील्ड सिर्फ़ उन्हीं rows में भरी जाएंगी जहाँ फ़ाइल में यह कॉलम पहले से खाली है।")
-        p1_bulk_panels = st.multiselect(
-            "यह List किन Panels में दिखे?", list(PANEL_OPTIONS.keys()), default=list(PANEL_OPTIONS.keys()),
-            format_func=lambda k: PANEL_OPTIONS[k], key="p1_bulk_panels",
-        )
+            p1_bulk_panels = st.multiselect(
+                "यह List किन Panels में दिखे?", list(PANEL_OPTIONS.keys()), default=list(PANEL_OPTIONS.keys()),
+                format_func=lambda k: PANEL_OPTIONS[k], key="p1_bulk_panels",
+            )
+        st.caption("Admission Year / Session सिर्फ़ उन्हीं rows में भरे जाएंगे जहाँ फ़ाइल में यह कॉलम पहले से खाली है।")
         if not p1_bulk_panels:
             st.warning("⚠️ कम से कम एक Panel चुनें, तभी List जोड़ी जा सकेगी।")
+        if "P4" in p1_bulk_panels:
+            p1_bulk_dept = st.selectbox("P4 के लिए Department (सभी rows Approve होकर यहीं जाएंगी)", st.session_state.departments, key="p1_bulk_dept")
+        else:
+            p1_bulk_dept = ""
 
         up_files = st.file_uploader("फ़ाइलें चुनें", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
 
@@ -704,10 +711,10 @@ if choice == "P1 — Entry & Upload":
             if all_new_rows:
                 total_rows = sum(len(a) for a in all_new_rows)
                 st.success(f"✅ कुल {len(all_new_rows)} फ़ाइलों से {total_rows} rows पढ़ ली गई हैं — नीचे बटन दबाकर पक्का जोड़ें।")
-                if st.button(f"📥 इन सभी {total_rows} Rows को सीधे Approve करके '{p1_bulk_dept}' में जोड़ें", type="primary", disabled=not p1_bulk_panels):
+                if st.button(f"📥 इन सभी {total_rows} Rows को सीधे Approve करके जोड़ें" + (f" ('{p1_bulk_dept}' में)" if p1_bulk_dept else ""), type="primary", disabled=not p1_bulk_panels):
                     db = pd.concat([db] + all_new_rows, ignore_index=True)
                     save_db(db)
-                    st.success(f"🎉 {total_rows} rows सीधे Approve होकर '{p1_bulk_dept}' को भेज दी गई हैं।")
+                    st.success(f"🎉 {total_rows} rows सीधे Approve हो गईं — {', '.join(p1_bulk_panels)} में दिखेंगी" + (f" (Department: '{p1_bulk_dept}')।" if p1_bulk_dept else "।"))
                     st.balloons()
                     st.rerun()
 
