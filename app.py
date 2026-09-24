@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import os
 import re
@@ -473,6 +474,42 @@ st.markdown("""
     .print-only-container { display: none; }
     </style>
 """, unsafe_allow_html=True)
+
+# ==========================================================
+# 🖨️ PRINT HELPER — button dabate hi browser ka Print dialog khulta hai
+# (sirf diya gaya HTML print hota hai; Streamlit page ka baaki hissa nahi)
+# ==========================================================
+def print_button(body_html, label="🖨️ Print करें", height=52):
+    doc = (
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Print</title><style>'
+        '@page { margin: 8mm; size: A4 landscape; }'
+        '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }'
+        'body { font-family: Arial, sans-serif; color: #000; }'
+        'table { width: 100%; border-collapse: collapse; font-size: 11px; }'
+        'th { background: #f2f2f2; border: 1px solid #111; padding: 6px; text-align: center; }'
+        'td { border: 1px solid #111; padding: 5px; text-align: left; }'
+        'thead { display: table-header-group; } tr { page-break-inside: avoid; }'
+        '</style></head><body>' + body_html + '</body></html>'
+    )
+    payload = json.dumps(doc).replace("</", "<\\/")
+    components.html(f"""
+    <button id="pb" style="width:100%;padding:9px 12px;border:none;border-radius:8px;cursor:pointer;
+        background:#0F2A4A;color:#fff;font-size:15px;font-weight:600;font-family:Arial,sans-serif;">{label}</button>
+    <script>
+    const DOC = {payload};
+    document.getElementById('pb').addEventListener('click', function() {{
+        const old = document.getElementById('pf'); if (old) old.remove();
+        const f = document.createElement('iframe');
+        f.id = 'pf';
+        f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+        document.body.appendChild(f);
+        const d = f.contentWindow.document;
+        d.open(); d.write(DOC); d.close();
+        setTimeout(function() {{ f.contentWindow.focus(); f.contentWindow.print(); }}, 300);
+    }});
+    </script>
+    """, height=height)
+
 
 # ==========================================================
 # 🛑 STEP 4: LOGIN GATEWAY
@@ -960,14 +997,10 @@ elif choice == "P5 — Print Panel":
                     file_name="print_panel_list.csv", mime="text/csv", use_container_width=True,
                 )
             with pr_col2:
-                do_print = st.button("🖨️ Print View तैयार करें", type="primary", use_container_width=True)
-
-            if do_print:
-                table_html = preview_df.to_html(index=False, escape=True)
-                header_html = f'<div style="margin-bottom:10px;">{_build_header_html("Arial, sans-serif")}<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>'
-                st.markdown(f'<div class="print-only-container">{header_html}{table_html}</div>', unsafe_allow_html=True)
-                st.info("Print view नीचे तैयार है — अब Browser से Ctrl+P / Cmd+P दबाएँ (सिर्फ़ header + यह टेबल print होगी)।")
-                st.markdown(f'<div class="print-hide">{header_html}{table_html}</div>', unsafe_allow_html=True)
+                _table_html = preview_df.to_html(index=False, escape=True)
+                _hdr = (f'<div style="margin-bottom:10px;">{_build_header_html("Arial, sans-serif")}'
+                        f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
+                print_button(_hdr + _table_html, label="🖨️ Print करें")
         else:
             st.warning("⚠️ Print करने के लिए कम से कम एक Column चुनें।")
 
