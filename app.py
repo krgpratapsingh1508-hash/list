@@ -250,14 +250,6 @@ def _p3_total_from_serial(serial_str):
     return str(total) if found else ""
 
 
-def _p3_to_multiline(val):
-    """Comma (,) se likhi kai values ko usi cell ke andar alag-alag lines me todta hai
-    (jaise '1-10, 5-21' -> '1-10' aur '5-21' do lines me) — Row alag nahi banti,
-    Name/Mobile/Total ek hi (merged jaisi) Row me rehte hain."""
-    parts = [p.strip() for p in re.split(r"[,\n]", str(val)) if p.strip()]
-    return "\n".join(parts)
-
-
 def load_faculty():
     if os.path.exists(FACULTY_FILE):
         try:
@@ -1091,29 +1083,6 @@ elif choice == "P3 — Guardian Tutors List":
                "'Allotted Class' का नाम वही रखें जो P4 में Department का नाम है, ताकि P4 में यह Tutor सही जगह दिखे।")
     if _fac.empty:
         st.info("📭 अभी List खाली है — ऊपर से फ़ाइल अपलोड करें, या नीचे टेबल में ➕ से Row जोड़ें।")
-    else:
-        if st.button("🔗 Duplicate Tutors Merge करें (same Name + Mobile + Department वाली Rows को एक में जोड़ें)",
-                      key="p3_merge_dup_btn"):
-            _merged_rows, _seen = [], {}
-            for _, _r in _fac.iterrows():
-                _key = (str(_r["Faculty Name"]).strip().lower(), str(_r["Mobile Number"]).strip(),
-                         str(_r["Tutor Department"]).strip().lower())
-                if _key in _seen:
-                    _mi = _seen[_key]
-                    _merged_rows[_mi]["Department"] = _p3_to_multiline(
-                        str(_merged_rows[_mi]["Department"]) + "," + str(_r["Department"]))
-                    _merged_rows[_mi]["Serial No"] = _p3_to_multiline(
-                        str(_merged_rows[_mi]["Serial No"]) + "," + str(_r["Serial No"]))
-                    _merged_rows[_mi]["Number of Students"] = (
-                        _p3_total_from_serial(_merged_rows[_mi]["Serial No"]) or _merged_rows[_mi]["Number of Students"])
-                else:
-                    _seen[_key] = len(_merged_rows)
-                    _merged_rows.append(dict(_r))
-            _before_n, _after_n = len(_fac), len(_merged_rows)
-            save_faculty(pd.DataFrame(_merged_rows, columns=FACULTY_COLUMNS))
-            st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
-            st.session_state["p3_fac_flash"] = f"✅ Merge हो गया — {_before_n} Rows से {_after_n} Rows बन गईं।"
-            st.rerun()
 
     # DEPARTMENT dropdown: app ke Departments + list me pehle se maujood koi bhi purana naam
     _dept_opts = list(dict.fromkeys(
