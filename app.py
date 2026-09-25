@@ -1141,20 +1141,39 @@ elif choice == "P3 — Guardian Tutors List":
     # ----------------------------------------------------------------
     with st.expander("➕ नया Tutor जोड़ें"):
         _n_dept_opts = _dept_opts if _dept_opts else [""]
-        with st.form("p3_add_form", clear_on_submit=True):
+        if "p3_add_cls_n" not in st.session_state:
+            st.session_state["p3_add_cls_n"] = 1
+        with st.form("p3_add_form", clear_on_submit=False):
             _n_tdept = st.selectbox("DEPARTMENT", _n_dept_opts, key="p3_add_tdept")
             _n_name = st.text_input("NAME OF GUARDIANS TUTORS", key="p3_add_name")
             _n_mob = st.text_input("MOBILE NO.", key="p3_add_mob")
-            _n_cls = st.text_input("Allotted Class", key="p3_add_cls",
-                                    help="Kai classes ho to comma (,) se likhein — jaise '1st Year, 2nd Year'")
+            st.markdown("**Allotted Class** — एक Tutor को दो-चार भी Class मिल सकती हैं, नीचे ➕ से और बॉक्स जोड़ें")
+            _n_cls_vals = []
+            for _ci in range(st.session_state["p3_add_cls_n"]):
+                _n_cls_vals.append(st.text_input(f"Allotted Class {_ci + 1}", key=f"p3_add_cls_{_ci}",
+                                                  help="जैसे '1st Year'" if _ci == 0 else ""))
             _n_srl = st.text_input("SERIAL NO.", key="p3_add_srl",
                                     help="Range likhein jaise '1-10' — kai ranges ho to comma (,) se, jaise '1-10, 5-21'")
-            _n_save = st.form_submit_button("💾 जोड़ें", type="primary", use_container_width=True)
+            _fb1, _fb2, _fb3 = st.columns(3)
+            with _fb1:
+                _n_save = st.form_submit_button("💾 जोड़ें", type="primary", use_container_width=True)
+            with _fb2:
+                _n_add_cls = st.form_submit_button("➕ Class जोड़ें", use_container_width=True)
+            with _fb3:
+                _n_rm_cls = st.form_submit_button("➖ Class हटाएँ", use_container_width=True,
+                                                    disabled=st.session_state["p3_add_cls_n"] <= 1)
+        if _n_add_cls:
+            st.session_state["p3_add_cls_n"] += 1
+            st.rerun()
+        if _n_rm_cls and st.session_state["p3_add_cls_n"] > 1:
+            st.session_state.pop(f"p3_add_cls_{st.session_state['p3_add_cls_n'] - 1}", None)
+            st.session_state["p3_add_cls_n"] -= 1
+            st.rerun()
         if _n_save:
             if not _n_name.strip() and not _n_tdept.strip():
                 st.warning("⚠️ कम से कम NAME या DEPARTMENT भरें।")
             else:
-                _n_cls_ml = _p3_to_multiline(_n_cls.strip())
+                _n_cls_ml = _p3_to_multiline(",".join(c.strip() for c in _n_cls_vals if c.strip()))
                 _n_srl_ml = _p3_to_multiline(_n_srl.strip())
                 _new_row = {
                     "Department": _n_cls_ml,
@@ -1167,6 +1186,9 @@ elif choice == "P3 — Guardian Tutors List":
                 }
                 _fac2 = pd.concat([_fac, pd.DataFrame([_new_row])], ignore_index=True)
                 save_faculty(_fac2[FACULTY_COLUMNS])
+                for _k in [k for k in list(st.session_state.keys()) if k.startswith("p3_add_cls_")]:
+                    st.session_state.pop(_k, None)
+                st.session_state["p3_add_cls_n"] = 1
                 st.session_state["p3_fac_flash"] = f"✅ '{_n_name.strip() or '(बिना नाम)'}' जुड़ गए।"
                 st.rerun()
 
@@ -1175,14 +1197,24 @@ elif choice == "P3 — Guardian Tutors List":
     if _eidx is not None and _eidx in _fac.index:
         _erow = _fac.loc[_eidx]
         st.markdown("### ✏️ Tutor की Details Edit करें")
+        _ecls_key = f"p3_edit_cls_n_{_eidx}"
+        if _ecls_key not in st.session_state:
+            _existing_cls = [c for c in _erow["Department"].split("\n") if c.strip()]
+            st.session_state[_ecls_key] = max(1, len(_existing_cls))
+            for _ci, _cv_ in enumerate(_existing_cls):
+                st.session_state[f"p3_edit_cls_{_eidx}_{_ci}"] = _cv_
         with st.form("p3_edit_form"):
             _e_name = st.text_input("NAME OF GUARDIANS TUTORS", value=_erow["Faculty Name"])
             _e_mob = st.text_input("MOBILE NO.", value=_erow["Mobile Number"])
             _e_dept_opts = _dept_opts if _dept_opts else [""]
             _e_dept_idx = _e_dept_opts.index(_erow["Tutor Department"]) if _erow["Tutor Department"] in _e_dept_opts else 0
             _e_tdept = st.selectbox("DEPARTMENT", _e_dept_opts, index=_e_dept_idx)
-            _e_cls = st.text_input("Allotted Class", value=_erow["Department"],
-                                    help="Kai classes ho to comma (,) se likhein — jaise '1st Year, 2nd Year'")
+            st.markdown("**Allotted Class** — एक Tutor को दो-चार भी Class मिल सकती हैं, नीचे ➕ से और बॉक्स जोड़ें")
+            _e_cls_vals = []
+            for _ci in range(st.session_state[_ecls_key]):
+                _default_v = st.session_state.get(f"p3_edit_cls_{_eidx}_{_ci}", "")
+                _e_cls_vals.append(st.text_input(f"Allotted Class {_ci + 1}", value=_default_v,
+                                                  key=f"p3_edit_cls_{_eidx}_{_ci}"))
             _e_srl = st.text_input("SERIAL NO.", value=_erow["Serial No"],
                                     help="Range likhein jaise '1-10' — kai ranges ho to comma (,) se, jaise '1-10, 5-21'")
             st.caption("ℹ️ TOTAL NUMBER OF STUDENTS Save karne par SERIAL NO. se apne aap calculate ho jayega — "
@@ -1194,8 +1226,27 @@ elif choice == "P3 — Guardian Tutors List":
                 _e_cancel = st.form_submit_button("✖️ Cancel", use_container_width=True)
             with _ef3:
                 _e_delete = st.form_submit_button("🗑️ Delete करें", use_container_width=True)
+            _ef4, _ef5 = st.columns(2)
+            with _ef4:
+                _e_add_cls = st.form_submit_button("➕ Class जोड़ें", use_container_width=True)
+            with _ef5:
+                _e_rm_cls = st.form_submit_button("➖ Class हटाएँ", use_container_width=True,
+                                                    disabled=st.session_state[_ecls_key] <= 1)
+
+        def _p3_edit_reset_cls_state():
+            st.session_state.pop(_ecls_key, None)
+            for _k in [k for k in list(st.session_state.keys()) if k.startswith(f"p3_edit_cls_{_eidx}_")]:
+                st.session_state.pop(_k, None)
+
+        if _e_add_cls:
+            st.session_state[_ecls_key] += 1
+            st.rerun()
+        if _e_rm_cls and st.session_state[_ecls_key] > 1:
+            st.session_state.pop(f"p3_edit_cls_{_eidx}_{st.session_state[_ecls_key] - 1}", None)
+            st.session_state[_ecls_key] -= 1
+            st.rerun()
         if _e_save:
-            _e_cls_ml = _p3_to_multiline(_e_cls.strip())
+            _e_cls_ml = _p3_to_multiline(",".join(c.strip() for c in _e_cls_vals if c.strip()))
             _e_srl_ml = _p3_to_multiline(_e_srl.strip())
             _fac.loc[_eidx, "Faculty Name"] = _e_name.strip()
             _fac.loc[_eidx, "Mobile Number"] = _e_mob.strip()
@@ -1204,13 +1255,16 @@ elif choice == "P3 — Guardian Tutors List":
             _fac.loc[_eidx, "Serial No"] = _e_srl_ml
             _fac.loc[_eidx, "Number of Students"] = _p3_total_from_serial(_e_srl_ml) or _erow["Number of Students"]
             save_faculty(_fac)
+            _p3_edit_reset_cls_state()
             st.session_state.pop("p3_edit_idx", None)
             st.session_state["p3_fac_flash"] = f"✅ '{_e_name.strip() or '(बिना नाम)'}' की Details Update हो गईं।"
             st.rerun()
         if _e_cancel:
+            _p3_edit_reset_cls_state()
             st.session_state.pop("p3_edit_idx", None)
             st.rerun()
         if _e_delete:
+            _p3_edit_reset_cls_state()
             _fac = _fac.drop(index=_eidx).reset_index(drop=True)
             save_faculty(_fac)
             st.session_state.pop("p3_edit_idx", None)
