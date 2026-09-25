@@ -1500,16 +1500,17 @@ elif choice == "P5 — Print Panel":
 
     _blank_line = "&nbsp;" * 22
 
-    def _build_header_html(font_family):
+    def _build_header_html(font_family, line2_override=None):
         guardian_val = st.session_state.ph_guardian_name.strip() or _blank_line
         mobile_val = st.session_state.ph_guardian_mobile.strip() or MOBILE_BLANK
+        _line2 = line2_override if line2_override is not None else st.session_state.ph_line2
         return f"""
         <div style="text-align:center; font-family:{font_family};">
             <div style="font-weight:700; font-size:{st.session_state.ph_size1}px; color:{st.session_state.ph_color1};">
                 {st.session_state.ph_line1 or "&nbsp;"}
             </div>
             <div style="font-weight:700; font-size:{st.session_state.ph_size2}px; color:{st.session_state.ph_color2}; margin-top:4px;">
-                {st.session_state.ph_line2 or "&nbsp;"}
+                {_line2 or "&nbsp;"}
             </div>
             <div style="font-weight:600; font-size:{st.session_state.ph_size3}px; color:{st.session_state.ph_color3}; margin-top:4px;">
                 {st.session_state.ph_line3 or "&nbsp;"}
@@ -1664,7 +1665,13 @@ elif choice == "P5 — Print Panel":
             _name_key = _pp_sorted["Student Name"].astype(str).str.strip().str.lower()
             _order = pd.DataFrame({"empty": _name_key == "", "name": _name_key}).sort_values(
                 ["empty", "name"], kind="stable").index
-            pp_print_df = _pp_sorted.loc[_order, pp_cols].reset_index(drop=True)
+            _raw_print_df = _pp_sorted.loc[_order, pp_cols].reset_index(drop=True)
+            _cy_ordered = (
+                _pp_sorted.loc[_order, "Current Year"].astype(str).map(normalize_course_year).reset_index(drop=True)
+                if "Current Year" in _pp_sorted.columns else pd.Series([""] * len(_raw_print_df))
+            )
+
+            pp_print_df = _raw_print_df.copy()
             pp_print_df.insert(0, "S.No", range(1, len(pp_print_df) + 1))
             preview_df = pp_print_df.rename(columns=PRINT_LABEL_OVERRIDES)
 
@@ -1685,6 +1692,16 @@ elif choice == "P5 — Print Panel":
             st.subheader("👁️ Preview")
             st.dataframe(preview_df, use_container_width=True, hide_index=True)
 
+            # ---- Agar chuni gayi Guardian Tutor ke Students me ek se zyada Class (Current Year)
+            # mili, to Print me har Class ke liye yeh Header dobara shuru hoga (S.No bhi 1 se) ----
+            _p5_classes_present = []
+            if _p5_guardian_active:
+                for _v in _cy_ordered:
+                    _vv = str(_v).strip()
+                    if _vv and _vv not in _p5_classes_present:
+                        _p5_classes_present.append(_vv)
+                _p5_classes_present.sort(key=lambda v: COURSE_YEAR_OPTIONS.index(v) if v in COURSE_YEAR_OPTIONS else 99)
+
             st.markdown("---")
             st.subheader("🖨️ Print / Export")
             pr_col1, pr_col2 = st.columns(2)
@@ -1695,10 +1712,36 @@ elif choice == "P5 — Print Panel":
                     file_name="print_panel_list.csv", mime="text/csv", use_container_width=True,
                 )
             with pr_col2:
-                _table_html = preview_df.to_html(index=False, escape=True)
-                _hdr = (f'<div style="margin-bottom:10px;">{_build_header_html("Arial, sans-serif")}'
-                        f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
-                print_button(_hdr + _table_html, label="🖨️ Print करें")
+                if len(_p5_classes_present) > 1:
+                    st.caption(f"ℹ️ इस Tutor की {len(_p5_classes_present)} अलग-अलग Class मिलीं — Print में हर Class के लिए "
+                               "यह Header (ऊपर वाला) दोबारा शुरू होगा, अपने S.No के साथ।")
+                    _sections = []
+                    for _cls_val in _p5_classes_present:
+                        _cls_mask = (_cy_ordered == _cls_val).values
+                        _cls_raw = _raw_print_df[_cls_mask].reset_index(drop=True)
+                        if _cls_raw.empty:
+                            continue
+                        _cls_print_df = _cls_raw.copy()
+                        _cls_print_df.insert(0, "S.No", range(1, len(_cls_print_df) + 1))
+                        _cls_preview = _cls_print_df.rename(columns=PRINT_LABEL_OVERRIDES)
+                        for _pcol in _cls_preview.columns:
+                            if _pcol == "S.No":
+                                continue
+                            _cls_preview[_pcol] = _cls_preview[_pcol].map(_p5_name_case)
+                        _cls_label = COURSE_YEAR_PRINT_LABELS.get(_cls_val, _cls_val.upper())
+                        _cls_line2 = (f"{_course_txt} {_cls_label} ({_sess_txt})" if _course_txt and _sess_txt
+                                      else (f"{_cls_label} ({_sess_txt})" if _sess_txt
+                                            else f"{_course_txt} {_cls_label}".strip()))
+                        _cls_hdr = (f'<div style="margin-bottom:10px; margin-top:18px;">'
+                                    f'{_build_header_html("Arial, sans-serif", line2_override=_cls_line2)}'
+                                    f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
+                        _sections.append(_cls_hdr + _cls_preview.to_html(index=False, escape=True))
+                    print_button("".join(_sections), label="🖨️ Print करें (हर Class अलग से)")
+                else:
+                    _table_html = preview_df.to_html(index=False, escape=True)
+                    _hdr = (f'<div style="margin-bottom:10px;">{_build_header_html("Arial, sans-serif")}'
+                            f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
+                    print_button(_hdr + _table_html, label="🖨️ Print करें")
         else:
             st.warning("⚠️ Print करने के लिए कम से कम एक Column चुनें।")
 
