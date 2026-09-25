@@ -439,7 +439,7 @@ MANUAL_COLUMN_ALIASES = {
     "mobno": "Mobile Number", "mobnumber": "Mobile Number", "mobilenum": "Mobile Number",
     "contactnumber": "Mobile Number", "phoneno": "Mobile Number", "contact": "Mobile Number",
     "mobilenumber1": "Mobile Number", "studentmobileno": "Mobile Number", "studentmobile": "Mobile Number",
-    "majorsubject": "Subject", "majorsub": "Subject", "mainsubject": "Subject",
+    "majorsubject": "Branch", "majorsub": "Branch", "mainsubject": "Branch",
     "major": "Branch", "majorbranch": "Branch", "branchmajor": "Branch",
     "streamname": "Branch", "stream": "Branch",
     "uid": "Unique ID", "uniqueno": "Unique ID", "uniqueidno": "Unique ID",
