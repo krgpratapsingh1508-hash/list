@@ -84,6 +84,38 @@ def normalize_course_year(value):
     key = re.sub(r"\s+", " ", s.lower().replace(".", "").strip())
     return _COURSE_YEAR_ALIASES.get(key, s)
 
+
+# Allotted Class text (jaise "PGDCA I Year") ke andar se Year-wala hissa dhoondhne ke liye
+# — sabse lambe alias pehle, taaki "1st year" jaisa poora phrase "1" se pehle match ho
+_ALLOTTED_CLASS_YEAR_PATTERN = re.compile(
+    r"\b(" + "|".join(sorted((re.escape(k) for k in _COURSE_YEAR_ALIASES.keys()), key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def parse_allotted_class(cls_text):
+    """'PGDCA I Year' jaise text ko (Course, Canonical Year) me todta hai — jaise ('PGDCA', '1st Year').
+    Year na mile to Year khaali rahega; jo Course text bache use jaisa likha hai waisa hi rakha jaata hai
+    (jab tak wo COURSE_NAME_OPTIONS ki kisi entry se match na kare, tab canonical spelling use hoti hai)."""
+    s = str(cls_text).strip()
+    if not s:
+        return "", ""
+    m = _ALLOTTED_CLASS_YEAR_PATTERN.search(s)
+    if m:
+        year_canon = normalize_course_year(m.group(1))
+        course_part = (s[:m.start()] + " " + s[m.end():]).strip(" ,.-")
+    else:
+        course_part = s
+        year_canon = ""
+    course_key = re.sub(r"[^a-z0-9]", "", course_part.lower())
+    course_final = course_part
+    for _opt in COURSE_NAME_OPTIONS:
+        if re.sub(r"[^a-z0-9]", "", _opt.lower()) == course_key:
+            course_final = _opt
+            break
+    return course_final, year_canon
+
+
 DEFAULT_DEPARTMENTS = [
     "Hindi", "Sanskrit", "Urdu", "English",
     "Economics", "History", "Philosophy", "Political Science",
@@ -1413,6 +1445,68 @@ elif choice == "P5 — Print Panel":
         if _k not in st.session_state:
             st.session_state[_k] = _v
 
+    # ---- Guardian Tutor ke P3 wale Allotted Class (jaise "PGDCA\nPGDCA\nPGDCA" +
+    # Serial No "1-10\n16-20\n11-15") se Course/Class dropdown auto-fill karna, aur
+    # agar ek se zyada Allotted Class/Serial No pairs hon to unhe Header me stacked
+    # (ek ke niche ek, apne Serial No ke saath) print karne ke liye taiyaar karna ----
+    _PH_OTHER_OPT = "✍️ अन्य (खुद लिखें)"
+    _p5_fac_early = load_faculty().reset_index(drop=True)
+    _p5_fac_early = _p5_fac_early[_p5_fac_early["Faculty Name"].astype(str).str.strip() != ""]
+    _p5_opts_early = {}
+    for _i, _r in _p5_fac_early.iterrows():
+        _lbl = str(_r["Faculty Name"]).strip()
+        _lbl_extra = str(_r["Tutor Department"]).strip() or str(_r["Department"]).strip()
+        if _lbl_extra:
+            _lbl += f" — {_lbl_extra}"
+        if _lbl in _p5_opts_early:
+            _lbl += f" (#{_i + 1})"
+        _p5_opts_early[_lbl] = _r
+    _p5_current_pick = st.session_state.get("ph_guardian_pick")
+    st.session_state["ph_allotted_lines"] = []
+    if _p5_current_pick and _p5_current_pick in _p5_opts_early:
+        _p5_row_early = _p5_opts_early[_p5_current_pick]
+        _cls_lines = [c.strip() for c in str(_p5_row_early["Department"]).split("\n")]
+        _srl_lines = [s.strip() for s in str(_p5_row_early["Serial No"]).split("\n")]
+        _pair_n = max(len(_cls_lines), len(_srl_lines))
+        _allotted_pairs = []
+        for _pi in range(_pair_n):
+            _c = _cls_lines[_pi] if _pi < len(_cls_lines) else ""
+            _s = _srl_lines[_pi] if _pi < len(_srl_lines) else ""
+            if _c or _s:
+                _allotted_pairs.append((_c, _s))
+        _built_lines = []
+        for _c, _s in _allotted_pairs:
+            if not _c:
+                continue
+            _p_course, _p_year = parse_allotted_class(_c)
+            _p_year_lbl = COURSE_YEAR_PRINT_LABELS.get(_p_year, _p_year)
+            _line_txt = f"{_p_course} {_p_year_lbl}".strip()
+            if _s:
+                _line_txt += f" ({_s})"
+            _built_lines.append(_line_txt)
+        st.session_state["ph_allotted_lines"] = _built_lines
+        # Sirf tab auto-fill karo jab Tutor ki selection abhi-abhi badli ho — taaki
+        # baad me haath se badla gaya Course/Class dobara reset na ho
+        if st.session_state.get("ph_last_auto_guardian") != _p5_current_pick and _allotted_pairs:
+            _auto_course, _auto_year = parse_allotted_class(_allotted_pairs[0][0])
+            if _auto_course:
+                if _auto_course in COURSE_NAME_OPTIONS:
+                    st.session_state["ph_course_pick"] = _auto_course
+                    st.session_state.pop("ph_course_custom", None)
+                else:
+                    st.session_state["ph_course_pick"] = _PH_OTHER_OPT
+                    st.session_state["ph_course_custom"] = _auto_course
+            if _auto_year:
+                if _auto_year in COURSE_YEAR_OPTIONS:
+                    st.session_state["ph_class_pick"] = _auto_year
+                    st.session_state.pop("ph_class_custom", None)
+                else:
+                    st.session_state["ph_class_pick"] = _PH_OTHER_OPT
+                    st.session_state["ph_class_custom"] = _auto_year
+            st.session_state["ph_last_auto_guardian"] = _p5_current_pick
+    else:
+        st.session_state["ph_last_auto_guardian"] = _p5_current_pick
+
     st.session_state.ph_line1 = st.text_input("Header Line 1 (College Name)", value=st.session_state.ph_line1)
     l1a, l1b = st.columns(2)
     with l1a:
@@ -1424,7 +1518,7 @@ elif choice == "P5 — Print Panel":
     with ph_c1:
         st.markdown("**Header Line 2 — Course / Class**")
         cc1, cc2 = st.columns(2)
-        _course_other = "✍️ अन्य (खुद लिखें)"
+        _course_other = _PH_OTHER_OPT
         with cc1:
             _course_all_opts = COURSE_NAME_OPTIONS + [_course_other]
             _course_default_idx = COURSE_NAME_OPTIONS.index("B.Com.") if "B.Com." in COURSE_NAME_OPTIONS else 0
@@ -1499,20 +1593,31 @@ elif choice == "P5 — Print Panel":
         st.session_state.ph_guardian_mobile = re.sub(r"\.0$", "", str(_p5_row["Mobile Number"]).strip())
         st.caption(f"👩‍🏫 **{st.session_state.ph_guardian_name}** — 📱 "
                    + (st.session_state.ph_guardian_mobile or "Mobile No. P3 की List में खाली है (P3 में भरें)"))
+        if st.session_state.get("ph_allotted_lines"):
+            st.caption("📚 इस Tutor के Allotted Class (P3 से) — Header में यह सब ek ke niche ek print होंगे:  \n"
+                       + "  \n".join(f"• {_l}" for _l in st.session_state["ph_allotted_lines"]))
 
     _blank_line = "&nbsp;" * 22
 
     def _build_header_html(font_family, line2_override=None):
         guardian_val = st.session_state.ph_guardian_name.strip() or _blank_line
         mobile_val = st.session_state.ph_guardian_mobile.strip() or MOBILE_BLANK
-        _line2 = line2_override if line2_override is not None else st.session_state.ph_line2
+        _allotted_lines = st.session_state.get("ph_allotted_lines") or []
+        if line2_override is not None:
+            _line2_html = line2_override
+        elif _allotted_lines:
+            # Ek se zyada Allotted Class + Serial No hon to sab ek ke niche ek print honge
+            _stacked = "<br>".join(_allotted_lines)
+            _line2_html = f"{_stacked}<br>{_sess_txt}" if _sess_txt else _stacked
+        else:
+            _line2_html = st.session_state.ph_line2
         return f"""
         <div style="text-align:center; font-family:{font_family};">
             <div style="font-weight:700; font-size:{st.session_state.ph_size1}px; color:{st.session_state.ph_color1};">
                 {st.session_state.ph_line1 or "&nbsp;"}
             </div>
             <div style="font-weight:700; font-size:{st.session_state.ph_size2}px; color:{st.session_state.ph_color2}; margin-top:4px;">
-                {_line2 or "&nbsp;"}
+                {_line2_html or "&nbsp;"}
             </div>
             <div style="font-weight:600; font-size:{st.session_state.ph_size3}px; color:{st.session_state.ph_color3}; margin-top:4px;">
                 {st.session_state.ph_line3 or "&nbsp;"}
