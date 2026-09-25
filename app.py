@@ -440,6 +440,8 @@ MANUAL_COLUMN_ALIASES = {
     "contactnumber": "Mobile Number", "phoneno": "Mobile Number", "contact": "Mobile Number",
     "mobilenumber1": "Mobile Number", "studentmobileno": "Mobile Number", "studentmobile": "Mobile Number",
     "majorsubject": "Subject", "majorsub": "Subject", "mainsubject": "Subject",
+    "major": "Branch", "majorbranch": "Branch", "branchmajor": "Branch",
+    "streamname": "Branch", "stream": "Branch",
     "uid": "Unique ID", "uniqueno": "Unique ID", "uniqueidno": "Unique ID",
     "rollnumber": "Roll No.", "rno": "Roll No.",
 }
@@ -1552,8 +1554,6 @@ elif choice == "P5 — Print Panel":
     # ---- Upar jo Guardian Tutor चुना गया hai, usi ko P3 me जो Students Assign हुए थे
     # (P3 → Actions → 📌 Assign se "Assigned Tutor" field bharti hai) — unhi ki List seedhe yahan aa jaye ----
     _p5_guardian_active = st.session_state.ph_guardian_name.strip()
-    _p5_before_tutor_filter_n = len(pp_view)
-    _p5_only_assigned = False
     if _p5_guardian_active:
         _p5_only_assigned = st.checkbox(
             f"👩‍🏫 सिर्फ़ '{_p5_guardian_active}' को Assign हुए Students दिखाएँ (P3 → Assign से)",
@@ -1646,18 +1646,11 @@ elif choice == "P5 — Print Panel":
     }
 
     if pp_view.empty:
-        if _p5_guardian_active and _p5_only_assigned and _p5_before_tutor_filter_n > 0:
-            st.info(f"📭 '{_p5_guardian_active}' को अभी तक P3 में कोई Student Assign नहीं हुआ (📌 Assign से), "
-                    "इसलिए List खाली आ रही है।")
-            st.caption("👉 या तो P3 में जाकर उस Tutor के सामने 📌 Assign दबाकर Students Assign करें, "
-                       "या ऊपर 'सिर्फ़ ... Assign हुए Students दिखाएँ' checkbox को untick कर दें "
-                       "(तब बाकी Filters से जितने भी Students मिलते हैं वो सब दिखेंगे)।")
-        else:
-            st.info("📭 चुने गए Filters से कोई record नहीं मिला।")
+        st.info("📭 चुने गए Filters से कोई record नहीं मिला।")
         if db.empty:
             st.warning("⚠️ Database बिल्कुल खाली है (कुल 0 records)। पहले P1 से data Upload/Entry करें — "
                        f"या `{DB_FILE}` फ़ाइल app वाले folder में मौजूद नहीं है।")
-        elif not (_p5_guardian_active and _p5_only_assigned and _p5_before_tutor_filter_n > 0):
+        else:
             _counts = db["Status"].astype(str).replace("", "(खाली)").value_counts().to_dict()
             st.caption(f"Database में कुल {len(db)} records हैं। Status-wise: {_counts}. "
                        "Status को 'सभी' और Department को 'सभी' करके देखें, और Search box खाली रखें।")
