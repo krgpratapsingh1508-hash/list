@@ -1084,193 +1084,187 @@ elif choice == "P3 — Guardian Tutors List":
     # DEPARTMENT dropdown: app ke Departments + list me pehle se maujood koi bhi purana naam
     _dept_opts = list(dict.fromkeys(
         list(st.session_state.departments) + [d for d in _fac["Tutor Department"].astype(str).str.strip() if d]))
-    _fac_view = pd.DataFrame({
-        "S.N.": range(1, len(_fac) + 1),
-        "DEPARTMENT": _fac["Tutor Department"].map(lambda v: v if str(v).strip() else None),
-        "NAME OF GUARDIANS TUTORS": _fac["Faculty Name"],
-        "MOBILE NO.": _fac["Mobile Number"].map(lambda v: v if str(v).strip() else MOBILE_BLANK),
-        "Allotted Class": _fac["Department"],
-        "SERIAL NO.": _fac["Serial No"],
-        "TOTAL NUMBER OF STUDENTS": [
-            _p3_total_from_serial(_s) or _n for _s, _n in zip(_fac["Serial No"], _fac["Number of Students"])
-        ],
-    })
+
     st.caption("ℹ️ **TOTAL NUMBER OF STUDENTS** अपने आप **SERIAL NO.** से calculate होता है (जैसे '1-10, 5-21' लिखने पर total = 27) — "
-               "इसे हाथ से भरने की ज़रूरत नहीं। SERIAL NO. या Allotted Class में comma (,) लगाकर कई values लिखोगे "
-               "to Save karne par wo usi cell ke andar alag-alag lines me dikhengi (Row alag nahi banegi — "
-               "NAME/MOBILE NO./TOTAL ek hi Row me rahenge).")
-    _fac_key = f"p3_fac_editor_v5_{st.session_state.get('p3_fac_n', 0)}"      # v5: SERIAL NO. column jodne par naya key
-    _fac_edit = st.data_editor(
-        _fac_view,
-        num_rows="dynamic",
-        use_container_width=True,
-        hide_index=True,
-        disabled=["S.N.", "TOTAL NUMBER OF STUDENTS"],
-        column_config={
-            "S.N.": st.column_config.NumberColumn("S.N.", width="small"),
-            "DEPARTMENT": st.column_config.SelectboxColumn("DEPARTMENT", options=_dept_opts, required=False),
-            "NAME OF GUARDIANS TUTORS": st.column_config.TextColumn("NAME OF GUARDIANS TUTORS", width="large"),
-            "MOBILE NO.": st.column_config.TextColumn("MOBILE NO."),
-            "Allotted Class": st.column_config.TextColumn("Allotted Class", help="Kai classes ho to comma (,) se likhein — jaise '1st Year, 2nd Year'"),
-            "SERIAL NO.": st.column_config.TextColumn("SERIAL NO.", help="Range likhein jaise '1-10' — kai ranges ho to comma (,) se, jaise '1-10, 5-21'"),
-            "TOTAL NUMBER OF STUDENTS": st.column_config.TextColumn("TOTAL NUMBER OF STUDENTS", help="SERIAL NO. se apne aap calculate hota hai — yahan edit nahi hota", disabled=True),
-        },
-        key=_fac_key,
-    )
-
-    _fac_c1, _fac_c2 = st.columns(2)
-    with _fac_c1:
-        _save_fac = st.button("💾 Save Changes", type="primary", use_container_width=True, key="p3_fac_save")
-    with _fac_c2:
-        _dl = _fac_edit.reset_index(drop=True).copy()
-        _dl["S.N."] = range(1, len(_dl) + 1)
-        _dl["MOBILE NO."] = _dl["MOBILE NO."].map(lambda v: "" if v is None or str(v).strip("_ ").strip() == "" else v)
-        st.download_button("⬇️ CSV Download करें", _dl.to_csv(index=False).encode("utf-8-sig"),
-                           file_name="guardian_tutors_list.csv", mime="text/csv", use_container_width=True)
-
-    if _save_fac:
-        _rows = []
-        def _cv(v):          # None / NaN -> "" , baaki text
-            return "" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v).strip()
-        for _idx, _r in _fac_edit.iterrows():
-            _tdept = _cv(_r.get("DEPARTMENT"))
-            _name = _cv(_r.get("NAME OF GUARDIANS TUTORS"))
-            _cls = _p3_to_multiline(_cv(_r.get("Allotted Class")))
-            _srl = _p3_to_multiline(_cv(_r.get("SERIAL NO.")))
-            _mob = _cv(_r.get("MOBILE NO.")).replace("_", "").strip()      # "______" wali khaali line data me save nahi hoti
-            if not _name and not _cls and not _mob and not _tdept and not _srl:
-                continue          # पूरी खाली Row सेव नहीं होगी
-            # Designation (जो यहाँ नहीं दिखता) पुरानी Row से बचाकर रखें
-            _old = _fac.loc[_idx] if _idx in _fac.index else None
-            _old_num = _old["Number of Students"] if _old is not None else ""
-            # Name/Mobile/Total ek hi Row me rehte hain — sirf Allotted Class aur SERIAL NO. cell ke
-            # andar comma (,) se likhi values alag-alag lines me todi jaati hain (upar _p3_to_multiline)
-            _rows.append({
-                "Department": _cls,
-                "Faculty Name": _name,
-                "Designation": _old["Designation"] if _old is not None else "",
-                "Mobile Number": _mob,
-                "Number of Students": _p3_total_from_serial(_srl) or _old_num,
-                "Tutor Department": _tdept,
-                "Serial No": _srl,
-            })
-        save_faculty(pd.DataFrame(_rows, columns=FACULTY_COLUMNS))
-        st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
-        st.session_state["p3_fac_flash"] = f"✅ Guardian Tutors List Save हो गई — कुल {len(_rows)} Rows।"
-        st.rerun()
+               "इसे हाथ से भरने की ज़रूरत नहीं। किसी Tutor की Details बदलने या उसे Students Assign करने के लिए "
+               "उसकी लाइन के सामने **Actions** में ✏️ Edit / 📌 Assign दबाएँ।")
 
     # ----------------------------------------------------------------
-    # ⚙️ ACTIONS — हर Tutor के सामने ✏️ Edit और 📌 Assign बटन
-    # (Edit = उस Tutor की details बदलें; Assign = उसे Students Assign करें)
+    # 📋 LIST TABLE — TOTAL NUMBER OF STUDENTS ke baad Actions column
+    # (Actions me ✏️ Edit aur 📌 Assign button — Streamlit ki grid me
+    #  seedhe button nahi daal sakte, isliye table row-by-row banti hai)
     # ----------------------------------------------------------------
-    st.markdown("---")
-    st.subheader("⚙️ Actions")
     if _fac.empty:
-        st.caption("यहाँ Actions के लिए पहले ऊपर List में कम से कम एक Row Save करें।")
+        st.info("📭 अभी List खाली है — ऊपर से फ़ाइल अपलोड करें, या नीचे ➕ से नया Tutor जोड़ें।")
     else:
+        _col_widths = [0.5, 1.3, 2.2, 1.3, 1.3, 1.2, 1.3, 1.3]
+        _headers = ["S.N.", "DEPARTMENT", "NAME OF GUARDIANS TUTORS", "MOBILE NO.",
+                    "Allotted Class", "SERIAL NO.", "TOTAL NUMBER OF STUDENTS", "⚙️ Actions"]
+        _hcols = st.columns(_col_widths)
+        for _hc, _htxt in zip(_hcols, _headers):
+            _hc.markdown(f"**{_htxt}**")
+        st.markdown("<hr style='margin:2px 0 8px 0;'>", unsafe_allow_html=True)
+
         for _aidx, _arow in _fac.iterrows():
-            _ac1, _ac2, _ac3 = st.columns([4, 1, 1])
-            with _ac1:
-                _lbl = _arow["Faculty Name"].strip() or "(बिना नाम)"
-                _dlbl = _arow["Tutor Department"].strip() or "—"
-                st.write(f"👩‍🏫 **{_lbl}** — {_dlbl}")
-            with _ac2:
-                if st.button("✏️ Edit", key=f"p3_edit_btn_{_aidx}", use_container_width=True):
-                    st.session_state["p3_edit_idx"] = _aidx
-                    st.session_state.pop("p3_assign_idx", None)
-                    st.rerun()
-            with _ac3:
-                if st.button("📌 Assign", key=f"p3_assign_btn_{_aidx}", use_container_width=True):
-                    st.session_state["p3_assign_idx"] = _aidx
-                    st.session_state.pop("p3_edit_idx", None)
-                    st.rerun()
+            _mob_disp = _arow["Mobile Number"].strip() or MOBILE_BLANK
+            _tot_disp = _p3_total_from_serial(_arow["Serial No"]) or _arow["Number of Students"] or "—"
+            _rc = st.columns(_col_widths)
+            _rc[0].write(_aidx + 1)
+            _rc[1].write(_arow["Tutor Department"].strip() or "—")
+            _rc[2].write(_arow["Faculty Name"].strip() or "(बिना नाम)")
+            _rc[3].write(_mob_disp)
+            _rc[4].markdown((_arow["Department"].replace("\n", "  \n") or "—"))
+            _rc[5].markdown((_arow["Serial No"].replace("\n", "  \n") or "—"))
+            _rc[6].write(_tot_disp)
+            with _rc[7]:
+                _ea1, _ea2 = st.columns(2)
+                with _ea1:
+                    if st.button("✏️", key=f"p3_edit_btn_{_aidx}", use_container_width=True, help="Edit"):
+                        st.session_state["p3_edit_idx"] = _aidx
+                        st.session_state.pop("p3_assign_idx", None)
+                        st.rerun()
+                with _ea2:
+                    if st.button("📌", key=f"p3_assign_btn_{_aidx}", use_container_width=True, help="Assign"):
+                        st.session_state["p3_assign_idx"] = _aidx
+                        st.session_state.pop("p3_edit_idx", None)
+                        st.rerun()
+            st.markdown("<hr style='margin:2px 0 8px 0;'>", unsafe_allow_html=True)
 
-        # ---- ✏️ EDIT FORM ----
-        _eidx = st.session_state.get("p3_edit_idx")
-        if _eidx is not None and _eidx in _fac.index:
-            _erow = _fac.loc[_eidx]
-            st.markdown("### ✏️ Tutor की Details Edit करें")
-            with st.form("p3_edit_form"):
-                _e_name = st.text_input("NAME OF GUARDIANS TUTORS", value=_erow["Faculty Name"])
-                _e_mob = st.text_input("MOBILE NO.", value=_erow["Mobile Number"])
-                _e_dept_opts = _dept_opts if _dept_opts else [""]
-                _e_dept_idx = _e_dept_opts.index(_erow["Tutor Department"]) if _erow["Tutor Department"] in _e_dept_opts else 0
-                _e_tdept = st.selectbox("DEPARTMENT", _e_dept_opts, index=_e_dept_idx)
-                _e_cls = st.text_input("Allotted Class", value=_erow["Department"],
-                                        help="Kai classes ho to comma (,) se likhein — jaise '1st Year, 2nd Year'")
-                _e_srl = st.text_input("SERIAL NO.", value=_erow["Serial No"],
-                                        help="Range likhein jaise '1-10' — kai ranges ho to comma (,) se, jaise '1-10, 5-21'")
-                st.caption("ℹ️ TOTAL NUMBER OF STUDENTS Save karne par SERIAL NO. se apne aap calculate ho jayega — "
-                           "abhi ke hisaab se: **" + (_p3_total_from_serial(_erow["Serial No"]) or _erow["Number of Students"] or "—") + "**")
-                _ef1, _ef2 = st.columns(2)
-                with _ef1:
-                    _e_save = st.form_submit_button("💾 Save", type="primary", use_container_width=True)
-                with _ef2:
-                    _e_cancel = st.form_submit_button("✖️ Cancel", use_container_width=True)
-            if _e_save:
-                _e_cls_ml = _p3_to_multiline(_e_cls.strip())
-                _e_srl_ml = _p3_to_multiline(_e_srl.strip())
-                _fac.loc[_eidx, "Faculty Name"] = _e_name.strip()
-                _fac.loc[_eidx, "Mobile Number"] = _e_mob.strip()
-                _fac.loc[_eidx, "Tutor Department"] = _e_tdept.strip()
-                _fac.loc[_eidx, "Department"] = _e_cls_ml
-                _fac.loc[_eidx, "Serial No"] = _e_srl_ml
-                _fac.loc[_eidx, "Number of Students"] = _p3_total_from_serial(_e_srl_ml) or _erow["Number of Students"]
-                save_faculty(_fac)
-                st.session_state.pop("p3_edit_idx", None)
-                st.session_state["p3_fac_flash"] = f"✅ '{_e_name.strip() or '(बिना नाम)'}' की Details Update हो गईं।"
-                st.rerun()
-            if _e_cancel:
-                st.session_state.pop("p3_edit_idx", None)
-                st.rerun()
+        _dl = _fac.reset_index(drop=True).copy()
+        _dl.insert(0, "S.N.", range(1, len(_dl) + 1))
+        _dl["Mobile Number"] = _dl["Mobile Number"].map(lambda v: "" if str(v).strip("_ ").strip() == "" else v)
+        st.download_button("⬇️ CSV Download करें", _dl.to_csv(index=False).encode("utf-8-sig"),
+                           file_name="guardian_tutors_list.csv", mime="text/csv")
 
-        # ---- 📌 ASSIGN FORM (P4 जैसी Assign process — Students को इस Tutor को Assign करना) ----
-        _asidx = st.session_state.get("p3_assign_idx")
-        if _asidx is not None and _asidx in _fac.index:
-            _asrow = _fac.loc[_asidx]
-            _as_name = _asrow["Faculty Name"].strip() or "(बिना नाम)"
-            st.markdown(f"### 📌 **{_as_name}** को Students Assign करें")
-            _as_dept_opts = st.session_state.departments if st.session_state.departments else [""]
-            _as_dept_default = _asrow["Tutor Department"] if _asrow["Tutor Department"] in _as_dept_opts else (
-                _asrow["Department"] if _asrow["Department"] in _as_dept_opts else _as_dept_opts[0])
-            _as_dept = st.selectbox("किस Department के Students में से चुनना है?", _as_dept_opts,
-                                     index=_as_dept_opts.index(_as_dept_default), key=f"p3_assign_dept_{_asidx}")
-            _pool = db[(db["Assigned Department"] == _as_dept) & (db["Status"] == "Approved")].copy()
-            _only_unassigned = st.checkbox(
-                "सिर्फ़ वो Students दिखाएँ जो अभी तक किसी Tutor को Assign नहीं हुए",
-                value=True, key=f"p3_assign_only_unassigned_{_asidx}")
-            if _only_unassigned:
-                _pool = _pool[_pool["Assigned Tutor"].astype(str).str.strip() == ""]
-            if _pool.empty:
-                st.info("📭 इस Department में Assign करने के लिए कोई Student नहीं मिला।")
+    # ----------------------------------------------------------------
+    # ➕ NAYA TUTOR JODEIN
+    # ----------------------------------------------------------------
+    with st.expander("➕ नया Tutor जोड़ें"):
+        _n_dept_opts = _dept_opts if _dept_opts else [""]
+        with st.form("p3_add_form", clear_on_submit=True):
+            _n_tdept = st.selectbox("DEPARTMENT", _n_dept_opts, key="p3_add_tdept")
+            _n_name = st.text_input("NAME OF GUARDIANS TUTORS", key="p3_add_name")
+            _n_mob = st.text_input("MOBILE NO.", key="p3_add_mob")
+            _n_cls = st.text_input("Allotted Class", key="p3_add_cls",
+                                    help="Kai classes ho to comma (,) se likhein — jaise '1st Year, 2nd Year'")
+            _n_srl = st.text_input("SERIAL NO.", key="p3_add_srl",
+                                    help="Range likhein jaise '1-10' — kai ranges ho to comma (,) se, jaise '1-10, 5-21'")
+            _n_save = st.form_submit_button("💾 जोड़ें", type="primary", use_container_width=True)
+        if _n_save:
+            if not _n_name.strip() and not _n_tdept.strip():
+                st.warning("⚠️ कम से कम NAME या DEPARTMENT भरें।")
             else:
-                _pool_disp = _pool.reset_index()   # 'index' column me asli db index safe rehta hai
-                _pool_disp.insert(0, "चुनें", False)
-                _pick_cols = ["चुनें", "Student Name", "Father Name", "Mobile Number", "Assigned Tutor"]
-                _picked = st.data_editor(
-                    _pool_disp[_pick_cols],
-                    hide_index=True, use_container_width=True,
-                    disabled=["Student Name", "Father Name", "Mobile Number", "Assigned Tutor"],
-                    column_config={"चुनें": st.column_config.CheckboxColumn("चुनें")},
-                    key=f"p3_assign_editor_{_asidx}",
-                )
-                _sel_pos = _picked.index[_picked["चुनें"] == True].tolist()
-                _af1, _af2 = st.columns(2)
-                with _af1:
-                    _do_assign = st.button(f"📌 चुने गए {len(_sel_pos)} Students को Assign करें", type="primary",
-                                            use_container_width=True, disabled=not _sel_pos, key=f"p3_do_assign_{_asidx}")
-                with _af2:
-                    _cancel_assign = st.button("✖️ Cancel", use_container_width=True, key=f"p3_cancel_assign_{_asidx}")
-                if _do_assign:
-                    _orig_idx = _pool_disp.loc[_sel_pos, "index"].tolist()
-                    db.loc[_orig_idx, "Assigned Tutor"] = _as_name
-                    save_db(db)
-                    st.session_state.pop("p3_assign_idx", None)
-                    st.session_state["p3_fac_flash"] = f"✅ {len(_orig_idx)} Students '{_as_name}' को Assign कर दिए गए।"
-                    st.rerun()
-                if _cancel_assign:
-                    st.session_state.pop("p3_assign_idx", None)
-                    st.rerun()
+                _n_cls_ml = _p3_to_multiline(_n_cls.strip())
+                _n_srl_ml = _p3_to_multiline(_n_srl.strip())
+                _new_row = {
+                    "Department": _n_cls_ml,
+                    "Faculty Name": _n_name.strip(),
+                    "Designation": "",
+                    "Mobile Number": _n_mob.strip(),
+                    "Number of Students": _p3_total_from_serial(_n_srl_ml),
+                    "Tutor Department": _n_tdept.strip(),
+                    "Serial No": _n_srl_ml,
+                }
+                _fac2 = pd.concat([_fac, pd.DataFrame([_new_row])], ignore_index=True)
+                save_faculty(_fac2[FACULTY_COLUMNS])
+                st.session_state["p3_fac_flash"] = f"✅ '{_n_name.strip() or '(बिना नाम)'}' जुड़ गए।"
+                st.rerun()
+
+    # ---- ✏️ EDIT FORM (Actions column ke ✏️ Edit button se khulta hai) ----
+    _eidx = st.session_state.get("p3_edit_idx")
+    if _eidx is not None and _eidx in _fac.index:
+        _erow = _fac.loc[_eidx]
+        st.markdown("### ✏️ Tutor की Details Edit करें")
+        with st.form("p3_edit_form"):
+            _e_name = st.text_input("NAME OF GUARDIANS TUTORS", value=_erow["Faculty Name"])
+            _e_mob = st.text_input("MOBILE NO.", value=_erow["Mobile Number"])
+            _e_dept_opts = _dept_opts if _dept_opts else [""]
+            _e_dept_idx = _e_dept_opts.index(_erow["Tutor Department"]) if _erow["Tutor Department"] in _e_dept_opts else 0
+            _e_tdept = st.selectbox("DEPARTMENT", _e_dept_opts, index=_e_dept_idx)
+            _e_cls = st.text_input("Allotted Class", value=_erow["Department"],
+                                    help="Kai classes ho to comma (,) se likhein — jaise '1st Year, 2nd Year'")
+            _e_srl = st.text_input("SERIAL NO.", value=_erow["Serial No"],
+                                    help="Range likhein jaise '1-10' — kai ranges ho to comma (,) se, jaise '1-10, 5-21'")
+            st.caption("ℹ️ TOTAL NUMBER OF STUDENTS Save karne par SERIAL NO. se apne aap calculate ho jayega — "
+                       "abhi ke hisaab se: **" + (_p3_total_from_serial(_erow["Serial No"]) or _erow["Number of Students"] or "—") + "**")
+            _ef1, _ef2, _ef3 = st.columns(3)
+            with _ef1:
+                _e_save = st.form_submit_button("💾 Save", type="primary", use_container_width=True)
+            with _ef2:
+                _e_cancel = st.form_submit_button("✖️ Cancel", use_container_width=True)
+            with _ef3:
+                _e_delete = st.form_submit_button("🗑️ Delete करें", use_container_width=True)
+        if _e_save:
+            _e_cls_ml = _p3_to_multiline(_e_cls.strip())
+            _e_srl_ml = _p3_to_multiline(_e_srl.strip())
+            _fac.loc[_eidx, "Faculty Name"] = _e_name.strip()
+            _fac.loc[_eidx, "Mobile Number"] = _e_mob.strip()
+            _fac.loc[_eidx, "Tutor Department"] = _e_tdept.strip()
+            _fac.loc[_eidx, "Department"] = _e_cls_ml
+            _fac.loc[_eidx, "Serial No"] = _e_srl_ml
+            _fac.loc[_eidx, "Number of Students"] = _p3_total_from_serial(_e_srl_ml) or _erow["Number of Students"]
+            save_faculty(_fac)
+            st.session_state.pop("p3_edit_idx", None)
+            st.session_state["p3_fac_flash"] = f"✅ '{_e_name.strip() or '(बिना नाम)'}' की Details Update हो गईं।"
+            st.rerun()
+        if _e_cancel:
+            st.session_state.pop("p3_edit_idx", None)
+            st.rerun()
+        if _e_delete:
+            _fac = _fac.drop(index=_eidx).reset_index(drop=True)
+            save_faculty(_fac)
+            st.session_state.pop("p3_edit_idx", None)
+            st.session_state["p3_fac_flash"] = "🗑️ Tutor हटा दिया गया।"
+            st.rerun()
+
+    # ---- 📌 ASSIGN FORM (Actions column ke 📌 Assign button se khulta hai — P4 jaisi Assign process) ----
+    _asidx = st.session_state.get("p3_assign_idx")
+    if _asidx is not None and _asidx in _fac.index:
+        _asrow = _fac.loc[_asidx]
+        _as_name = _asrow["Faculty Name"].strip() or "(बिना नाम)"
+        st.markdown(f"### 📌 **{_as_name}** को Students Assign करें")
+        _as_dept_opts = st.session_state.departments if st.session_state.departments else [""]
+        _as_dept_default = _asrow["Tutor Department"] if _asrow["Tutor Department"] in _as_dept_opts else (
+            _asrow["Department"] if _asrow["Department"] in _as_dept_opts else _as_dept_opts[0])
+        _as_dept = st.selectbox("किस Department के Students में से चुनना है?", _as_dept_opts,
+                                 index=_as_dept_opts.index(_as_dept_default), key=f"p3_assign_dept_{_asidx}")
+        _pool = db[(db["Assigned Department"] == _as_dept) & (db["Status"] == "Approved")].copy()
+        _only_unassigned = st.checkbox(
+            "सिर्फ़ वो Students दिखाएँ जो अभी तक किसी Tutor को Assign नहीं हुए",
+            value=True, key=f"p3_assign_only_unassigned_{_asidx}")
+        if _only_unassigned:
+            _pool = _pool[_pool["Assigned Tutor"].astype(str).str.strip() == ""]
+        if _pool.empty:
+            st.info("📭 इस Department में Assign करने के लिए कोई Student नहीं मिला।")
+        else:
+            _pool_disp = _pool.reset_index()   # 'index' column me asli db index safe rehta hai
+            _pool_disp.insert(0, "चुनें", False)
+            _pick_cols = ["चुनें", "Student Name", "Father Name", "Mobile Number", "Assigned Tutor"]
+            _picked = st.data_editor(
+                _pool_disp[_pick_cols],
+                hide_index=True, use_container_width=True,
+                disabled=["Student Name", "Father Name", "Mobile Number", "Assigned Tutor"],
+                column_config={"चुनें": st.column_config.CheckboxColumn("चुनें")},
+                key=f"p3_assign_editor_{_asidx}",
+            )
+            _sel_pos = _picked.index[_picked["चुनें"] == True].tolist()
+            _af1, _af2 = st.columns(2)
+            with _af1:
+                _do_assign = st.button(f"📌 चुने गए {len(_sel_pos)} Students को Assign करें", type="primary",
+                                        use_container_width=True, disabled=not _sel_pos, key=f"p3_do_assign_{_asidx}")
+            with _af2:
+                _cancel_assign = st.button("✖️ Cancel", use_container_width=True, key=f"p3_cancel_assign_{_asidx}")
+            if _do_assign:
+                _orig_idx = _pool_disp.loc[_sel_pos, "index"].tolist()
+                db.loc[_orig_idx, "Assigned Tutor"] = _as_name
+                save_db(db)
+                st.session_state.pop("p3_assign_idx", None)
+                st.session_state["p3_fac_flash"] = f"✅ {len(_orig_idx)} Students '{_as_name}' को Assign कर दिए गए।"
+                st.rerun()
+            if _cancel_assign:
+                st.session_state.pop("p3_assign_idx", None)
+                st.rerun()
+
 
 # ==========================================================
 # 🏢 P4 — DEPARTMENT PANEL
