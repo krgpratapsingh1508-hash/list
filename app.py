@@ -1548,6 +1548,17 @@ elif choice == "P5 — Print Panel":
         s = pp_search.strip().lower()
         pp_view = pp_view[pp_view.apply(lambda r: s in " ".join(str(v).lower() for v in r.values), axis=1)]
 
+    # ---- Upar jo Guardian Tutor चुना गया hai, usi ko P3 me जो Students Assign हुए थे
+    # (P3 → Actions → 📌 Assign se "Assigned Tutor" field bharti hai) — unhi ki List seedhe yahan aa jaye ----
+    _p5_guardian_active = st.session_state.ph_guardian_name.strip()
+    if _p5_guardian_active:
+        _p5_only_assigned = st.checkbox(
+            f"👩‍🏫 सिर्फ़ '{_p5_guardian_active}' को Assign हुए Students दिखाएँ (P3 → Assign से)",
+            value=True, key="pp_only_assigned_tutor")
+        if _p5_only_assigned:
+            pp_view = pp_view[pp_view["Assigned Tutor"].astype(str).str.strip().str.lower()
+                               == _p5_guardian_active.lower()]
+
     # ---- Subject Type: Major / Minor / Vocational / MDC / PW-AP-CE me se kis ki list print karni hai ----
     st.markdown("**📚 किस Subject-wise List Print करनी है? (Major / Minor / Vocational / MDC / PW-AP-CE)**")
     _subject_type_map = {
