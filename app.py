@@ -1565,7 +1565,7 @@ elif choice == "P5 — Print Panel":
     # ---- Subject Type: Major / Minor / Vocational / MDC / PW-AP-CE me se kis ki list print karni hai ----
     st.markdown("**📚 किस Subject-wise List Print करनी है? (Major / Minor / Vocational / MDC / PW-AP-CE)**")
     _subject_type_map = {
-        "Major Subject": "Subject",
+        "Major Subject": "Branch",
         "Minor Subjects": "Minor Subjects",
         "Vocational Subjects": "Vocational Subjects",
         "MDC Subjects": "MDC Subjects",
@@ -1774,7 +1774,7 @@ elif choice == "P6 — Admin Panel":
         else:
             _p6_summary_cols = {
                 "Degree": "Degree",
-                "Major Subject": "Subject",
+                "Major Subject": "Branch",
                 "Minor Subjects": "Minor Subjects",
                 "Vocational Subjects": "Vocational Subjects",
                 "MDC Subjects": "MDC Subjects",
