@@ -192,6 +192,46 @@ def remove_old_default_departments():
 FACULTY_COLUMNS = ["Department", "Faculty Name", "Designation", "Mobile Number", "Number of Students", "Tutor Department", "Serial No"]
 
 
+def _p3_total_from_serial(serial_str):
+    """'1-10, 5-21' jaisi Serial No. range(s) se total students count khud nikaalta hai
+    (a-b range ka size, ya sirf ek number ho to 1). Comma se multiple ranges ka jod ho jaata hai.
+    Agar kuch bhi valid range/number nahi mila to khaali string lautata hai."""
+    s = str(serial_str).strip()
+    if not s:
+        return ""
+    total = 0
+    found = False
+    for part in s.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            bits = part.split("-")
+            if len(bits) == 2 and bits[0].strip().isdigit() and bits[1].strip().isdigit():
+                a, b = int(bits[0].strip()), int(bits[1].strip())
+                if b >= a:
+                    total += (b - a + 1)
+                    found = True
+        elif part.isdigit():
+            total += 1
+            found = True
+    return str(total) if found else ""
+
+
+def _p3_split_row_parts(cls_val, srl_val):
+    """Agar Allotted Class ya Serial No. me comma se kai values likhi hon (jaise '1-10, 5-21'),
+    to unhe alag-alag rows me todta hai — comma ke baad wala hissa agli row me jaata hai.
+    Jis column me sirf ek value ho, wo sabhi nayi rows me repeat ho jaati hai."""
+    cls_parts = [p.strip() for p in str(cls_val).split(",")] or [""]
+    srl_parts = [p.strip() for p in str(srl_val).split(",")] or [""]
+    n = max(len(cls_parts), len(srl_parts))
+    if len(cls_parts) < n:
+        cls_parts = cls_parts + [cls_parts[-1]] * (n - len(cls_parts))
+    if len(srl_parts) < n:
+        srl_parts = srl_parts + [srl_parts[-1]] * (n - len(srl_parts))
+    return list(zip(cls_parts, srl_parts))
+
+
 def load_faculty():
     if os.path.exists(FACULTY_FILE):
         try:
@@ -1034,23 +1074,28 @@ elif choice == "P3 — Guardian Tutors List":
         "MOBILE NO.": _fac["Mobile Number"].map(lambda v: v if str(v).strip() else MOBILE_BLANK),
         "Allotted Class": _fac["Department"],
         "SERIAL NO.": _fac["Serial No"],
-        "TOTAL NUMBER OF STUDENTS": _fac["Number of Students"],
+        "TOTAL NUMBER OF STUDENTS": [
+            _p3_total_from_serial(_s) or _n for _s, _n in zip(_fac["Serial No"], _fac["Number of Students"])
+        ],
     })
+    st.caption("ℹ️ **TOTAL NUMBER OF STUDENTS** अपने आप **SERIAL NO.** से calculate होता है (जैसे '1-10, 5-21' लिखने पर total = 27) — "
+               "इसे हाथ से भरने की ज़रूरत नहीं। SERIAL NO. या Allotted Class में comma (,) लगाकर कई values लिखोगे "
+               "to Save karne par har value अपनी अलग Row में अपने आप चली जाएगी।")
     _fac_key = f"p3_fac_editor_v5_{st.session_state.get('p3_fac_n', 0)}"      # v5: SERIAL NO. column jodne par naya key
     _fac_edit = st.data_editor(
         _fac_view,
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
-        disabled=["S.N."],
+        disabled=["S.N.", "TOTAL NUMBER OF STUDENTS"],
         column_config={
             "S.N.": st.column_config.NumberColumn("S.N.", width="small"),
             "DEPARTMENT": st.column_config.SelectboxColumn("DEPARTMENT", options=_dept_opts, required=False),
             "NAME OF GUARDIANS TUTORS": st.column_config.TextColumn("NAME OF GUARDIANS TUTORS", width="large"),
             "MOBILE NO.": st.column_config.TextColumn("MOBILE NO."),
-            "Allotted Class": st.column_config.TextColumn("Allotted Class"),
-            "SERIAL NO.": st.column_config.TextColumn("SERIAL NO.", help="Is subject/tutor ki list ka serial number range yahan likhein (jaise 1-50)"),
-            "TOTAL NUMBER OF STUDENTS": st.column_config.TextColumn("TOTAL NUMBER OF STUDENTS"),
+            "Allotted Class": st.column_config.TextColumn("Allotted Class", help="Kai classes ho to comma (,) se likhein — jaise '1st Year, 2nd Year'"),
+            "SERIAL NO.": st.column_config.TextColumn("SERIAL NO.", help="Range likhein jaise '1-10' — kai ranges ho to comma (,) se, jaise '1-10, 5-21'"),
+            "TOTAL NUMBER OF STUDENTS": st.column_config.TextColumn("TOTAL NUMBER OF STUDENTS", help="SERIAL NO. se apne aap calculate hota hai — yahan edit nahi hota", disabled=True),
         },
         key=_fac_key,
     )
@@ -1074,21 +1119,23 @@ elif choice == "P3 — Guardian Tutors List":
             _name = _cv(_r.get("NAME OF GUARDIANS TUTORS"))
             _cls = _cv(_r.get("Allotted Class"))
             _srl = _cv(_r.get("SERIAL NO."))
-            _num = _cv(_r.get("TOTAL NUMBER OF STUDENTS"))
             _mob = _cv(_r.get("MOBILE NO.")).replace("_", "").strip()      # "______" wali khaali line data me save nahi hoti
-            if not _name and not _cls and not _num and not _mob and not _tdept and not _srl:
+            if not _name and not _cls and not _mob and not _tdept and not _srl:
                 continue          # पूरी खाली Row सेव नहीं होगी
             # Designation (जो यहाँ नहीं दिखता) पुरानी Row से बचाकर रखें
             _old = _fac.loc[_idx] if _idx in _fac.index else None
-            _rows.append({
-                "Department": _cls,
-                "Faculty Name": _name,
-                "Designation": _old["Designation"] if _old is not None else "",
-                "Mobile Number": _mob,
-                "Number of Students": _num,
-                "Tutor Department": _tdept,
-                "Serial No": _srl,
-            })
+            _old_num = _old["Number of Students"] if _old is not None else ""
+            # Allotted Class / SERIAL NO. me comma (,) se likhi kai values ko alag-alag Rows me todna
+            for _p_cls, _p_srl in _p3_split_row_parts(_cls, _srl):
+                _rows.append({
+                    "Department": _p_cls,
+                    "Faculty Name": _name,
+                    "Designation": _old["Designation"] if _old is not None else "",
+                    "Mobile Number": _mob,
+                    "Number of Students": _p3_total_from_serial(_p_srl) or _old_num,
+                    "Tutor Department": _tdept,
+                    "Serial No": _p_srl,
+                })
         save_faculty(pd.DataFrame(_rows, columns=FACULTY_COLUMNS))
         st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
         st.session_state["p3_fac_flash"] = f"✅ Guardian Tutors List Save हो गई — कुल {len(_rows)} Rows।"
@@ -1131,24 +1178,35 @@ elif choice == "P3 — Guardian Tutors List":
                 _e_dept_opts = _dept_opts if _dept_opts else [""]
                 _e_dept_idx = _e_dept_opts.index(_erow["Tutor Department"]) if _erow["Tutor Department"] in _e_dept_opts else 0
                 _e_tdept = st.selectbox("DEPARTMENT", _e_dept_opts, index=_e_dept_idx)
-                _e_cls = st.text_input("Allotted Class", value=_erow["Department"])
-                _e_srl = st.text_input("SERIAL NO.", value=_erow["Serial No"])
-                _e_num = st.text_input("TOTAL NUMBER OF STUDENTS", value=_erow["Number of Students"])
+                _e_cls = st.text_input("Allotted Class", value=_erow["Department"],
+                                        help="Kai classes ho to comma (,) se likhein — jaise '1st Year, 2nd Year'")
+                _e_srl = st.text_input("SERIAL NO.", value=_erow["Serial No"],
+                                        help="Range likhein jaise '1-10' — kai ranges ho to comma (,) se, jaise '1-10, 5-21'")
+                st.caption("ℹ️ TOTAL NUMBER OF STUDENTS Save karne par SERIAL NO. se apne aap calculate ho jayega — "
+                           "abhi ke hisaab se: **" + (_p3_total_from_serial(_erow["Serial No"]) or _erow["Number of Students"] or "—") + "**")
                 _ef1, _ef2 = st.columns(2)
                 with _ef1:
                     _e_save = st.form_submit_button("💾 Save", type="primary", use_container_width=True)
                 with _ef2:
                     _e_cancel = st.form_submit_button("✖️ Cancel", use_container_width=True)
             if _e_save:
-                _fac.loc[_eidx, "Faculty Name"] = _e_name.strip()
-                _fac.loc[_eidx, "Mobile Number"] = _e_mob.strip()
-                _fac.loc[_eidx, "Tutor Department"] = _e_tdept.strip()
-                _fac.loc[_eidx, "Department"] = _e_cls.strip()
-                _fac.loc[_eidx, "Serial No"] = _e_srl.strip()
-                _fac.loc[_eidx, "Number of Students"] = _e_num.strip()
-                save_faculty(_fac)
+                _e_parts = _p3_split_row_parts(_e_cls.strip(), _e_srl.strip())
+                _e_new_rows = [{
+                    "Department": _p_cls,
+                    "Faculty Name": _e_name.strip(),
+                    "Designation": _erow["Designation"],
+                    "Mobile Number": _e_mob.strip(),
+                    "Number of Students": _p3_total_from_serial(_p_srl) or _erow["Number of Students"],
+                    "Tutor Department": _e_tdept.strip(),
+                    "Serial No": _p_srl,
+                } for _p_cls, _p_srl in _e_parts]
+                _fac_after_edit = pd.concat(
+                    [_fac.drop(index=_eidx).reset_index(drop=True), pd.DataFrame(_e_new_rows, columns=FACULTY_COLUMNS)],
+                    ignore_index=True)
+                save_faculty(_fac_after_edit)
                 st.session_state.pop("p3_edit_idx", None)
-                st.session_state["p3_fac_flash"] = f"✅ '{_e_name.strip() or '(बिना नाम)'}' की Details Update हो गईं।"
+                _split_note = f" ({len(_e_new_rows)} Rows में split हो गया)" if len(_e_new_rows) > 1 else ""
+                st.session_state["p3_fac_flash"] = f"✅ '{_e_name.strip() or '(बिना नाम)'}' की Details Update हो गईं।{_split_note}"
                 st.rerun()
             if _e_cancel:
                 st.session_state.pop("p3_edit_idx", None)
