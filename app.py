@@ -1863,6 +1863,7 @@ elif choice == "P5 — Print Panel":
         "Student Name": "Full Name",
         "Father Name": "Father Name",
         "Mobile Number": "Mob. No.",
+        "Branch": "Major Subject",
     }
 
     if pp_view.empty:
@@ -1879,6 +1880,7 @@ elif choice == "P5 — Print Panel":
         pp_cols = st.multiselect(
             "Print के लिए Columns चुनें (S.No अपने आप जुड़ जाएगा)", ALL_COLUMNS,
             default=default_print_cols,
+            format_func=lambda c: PRINT_LABEL_OVERRIDES.get(c, c),
             key="pp_cols",
         )
         if pp_cols:
