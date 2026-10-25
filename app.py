@@ -1229,9 +1229,14 @@ elif choice == "P3 — Guardian Tutors List":
                                                        "Major Subject" if _p3_subj_type == "Major Subject" else "Branch",
                                                        "Year", "Serial No.", "Total Number of Students"])
         _pr_title = _html.escape(st.session_state.get("ph_line1", "") or "")
+        _pr_summary = " &nbsp;|&nbsp; ".join(
+            [f"<b>Total Students:</b> {len(db)}"]
+            + [f"<b>{_html.escape(str(_y))}:</b> {int(_p3_yr_counts[_y])}" for _y in _p3_yr_order]
+            + ([f"<b>Year Blank:</b> {_p3_yr_blank}"] if _p3_yr_blank else []))
         _pr_html = (f'<div style="text-align:center; font-family:Arial,sans-serif; margin-bottom:10px;">'
                     f'<div style="font-weight:700; font-size:18px;">{_pr_title}</div>'
                     f'<div style="font-weight:600; font-size:15px; margin-top:4px;">LIST OF GUARDIAN TUTORS</div></div>'
+                    f'<div style="font-family:Arial,sans-serif; font-size:13px; margin:6px 0 10px 0;">{_pr_summary}</div>'
                     f'<table><thead><tr>{_pr_head}</tr></thead><tbody>{"".join(_pr_rows)}</tbody></table>')
         print_button(_pr_html, label="🖨️ Print करें (यह List)")
 
