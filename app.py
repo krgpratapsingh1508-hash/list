@@ -1242,14 +1242,17 @@ elif choice == "P3 — Guardian Tutors List":
             _n_tdept = st.selectbox("DEPARTMENT", _n_dept_opts, key="p3_add_tdept")
             _n_name = st.text_input("NAME OF GUARDIANS TUTORS", key="p3_add_name")
             _n_mob = st.text_input("MOBILE NO.", key="p3_add_mob")
-            st.markdown(f"**Allotted Class ({_p3_subj_type}) + SERIAL NO.** — हर Class के साथ उसका SERIAL NO. भी साथ में लिखें; "
+            st.markdown(f"**Degree + Year + Branch + SERIAL NO. ({_p3_subj_type})** — हर Class के साथ उसका SERIAL NO. भी साथ में लिखें; "
                         "एक से ज़्यादा Class हों तो नीचे ➕ से और जोड़ी जोड़ें (जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा)")
             _n_cls_vals, _n_srl_vals, _n_br_vals = [], [], []
             for _ci in range(st.session_state["p3_add_cls_n"]):
-                _cc1, _cc3, _cc2 = st.columns(3)
+                _cc1, _cc1y, _cc3, _cc2 = st.columns(4)
                 with _cc1:
-                    _n_cls_vals.append(st.text_input(f"Allotted Class {_ci + 1} (Degree + Year)", key=f"p3_add_cls_{_ci}",
-                                                      help="जैसे 'PGDCA I Year' — Degree और Year table में अलग-अलग दिखेंगे" if _ci == 0 else ""))
+                    _n_deg = st.text_input(f"Degree {_ci + 1}", key=f"p3_add_cls_{_ci}",
+                                           help="जैसे 'PGDCA', 'B.Com.'" if _ci == 0 else "")
+                with _cc1y:
+                    _n_yr = st.selectbox(f"Year {_ci + 1}", [""] + COURSE_YEAR_OPTIONS, key=f"p3_add_yr_{_ci}")
+                _n_cls_vals.append(f"{_n_deg.strip()} {_n_yr}".strip())
                 with _cc3:
                     _n_br_vals.append(st.text_input(f"Branch {_ci + 1}", key=f"p3_add_br_{_ci}",
                                                      help="जैसे 'Commerce'" if _ci == 0 else ""))
@@ -1272,6 +1275,7 @@ elif choice == "P3 — Guardian Tutors List":
             st.session_state.pop(f"p3_add_cls_{_n_last}", None)
             st.session_state.pop(f"p3_add_srl_{_n_last}", None)
             st.session_state.pop(f"p3_add_br_{_n_last}", None)
+            st.session_state.pop(f"p3_add_yr_{_n_last}", None)
             st.session_state["p3_add_cls_n"] -= 1
             st.rerun()
         if _n_save:
@@ -1297,7 +1301,8 @@ elif choice == "P3 — Guardian Tutors List":
                 _fac2 = pd.concat([_fac, pd.DataFrame([_new_row])], ignore_index=True)
                 save_faculty(_fac2[FACULTY_COLUMNS])
                 for _k in [k for k in list(st.session_state.keys())
-                           if k.startswith("p3_add_cls_") or k.startswith("p3_add_srl_") or k.startswith("p3_add_br_")]:
+                           if k.startswith("p3_add_cls_") or k.startswith("p3_add_srl_") or k.startswith("p3_add_br_")
+                           or k.startswith("p3_add_yr_")]:
                     st.session_state.pop(_k, None)
                 st.session_state["p3_add_cls_n"] = 1
                 st.session_state["p3_fac_flash"] = f"✅ '{_n_name.strip() or '(बिना नाम)'}' जुड़ गए।"
@@ -1319,7 +1324,9 @@ elif choice == "P3 — Guardian Tutors List":
             _n_pairs_init = max(1, len(_existing_cls), len(_existing_srl), len(_existing_br))
             st.session_state[_ecls_key] = _n_pairs_init
             for _ci in range(_n_pairs_init):
-                st.session_state[f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_cls[_ci] if _ci < len(_existing_cls) else ""
+                _ex_deg, _ex_yr = parse_allotted_class(_existing_cls[_ci] if _ci < len(_existing_cls) else "")
+                st.session_state[f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}"] = _ex_deg
+                st.session_state[f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}"] = _ex_yr if _ex_yr in COURSE_YEAR_OPTIONS else ""
                 st.session_state[f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_srl[_ci] if _ci < len(_existing_srl) else ""
                 st.session_state[f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_br[_ci] if _ci < len(_existing_br) else ""
         with st.form("p3_edit_form"):
@@ -1332,12 +1339,16 @@ elif choice == "P3 — Guardian Tutors List":
                         "जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा")
             _e_cls_vals, _e_srl_vals, _e_br_vals = [], [], []
             for _ci in range(st.session_state[_ecls_key]):
-                _ecc1, _ecc3, _ecc2 = st.columns(3)
+                _ecc1, _ecc1y, _ecc3, _ecc2 = st.columns(4)
                 with _ecc1:
                     _default_c = st.session_state.get(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}", "")
-                    _e_cls_vals.append(st.text_input(f"Allotted Class {_ci + 1} (Degree + Year)", value=_default_c,
-                                                      key=f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}",
-                                                      help="जैसे 'PGDCA I Year'" if _ci == 0 else ""))
+                    _e_deg = st.text_input(f"Degree {_ci + 1}", value=_default_c,
+                                           key=f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}",
+                                           help="जैसे 'PGDCA', 'B.Com.'" if _ci == 0 else "")
+                with _ecc1y:
+                    _e_yr = st.selectbox(f"Year {_ci + 1}", [""] + COURSE_YEAR_OPTIONS,
+                                         key=f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}")
+                _e_cls_vals.append(f"{_e_deg.strip()} {_e_yr}".strip())
                 with _ecc3:
                     _default_b = st.session_state.get(f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}", "")
                     _e_br_vals.append(st.text_input(f"Branch {_ci + 1}", value=_default_b,
@@ -1366,7 +1377,7 @@ elif choice == "P3 — Guardian Tutors List":
             st.session_state.pop(_ecls_key, None)
             for _k in [k for k in list(st.session_state.keys())
                        if k.startswith(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_") or k.startswith(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_")
-                       or k.startswith(f"p3_edit_br_{_eidx}_{_p3_subj_type}_")]:
+                       or k.startswith(f"p3_edit_br_{_eidx}_{_p3_subj_type}_") or k.startswith(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_")]:
                 st.session_state.pop(_k, None)
 
         if _e_add_cls:
@@ -1377,6 +1388,7 @@ elif choice == "P3 — Guardian Tutors List":
             st.session_state.pop(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state.pop(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state.pop(f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_e_last}", None)
+            st.session_state.pop(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state[_ecls_key] -= 1
             st.rerun()
         if _e_save:
