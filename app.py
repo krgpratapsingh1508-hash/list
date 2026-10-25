@@ -1116,39 +1116,13 @@ elif choice == "P3 — Guardian Tutors List":
 
     _fac = load_faculty().reset_index(drop=True)
 
-    st.markdown("**📚 किस Subject Type की List दिखानी/भरनी है?**")
-    _p3_subj_type = st.selectbox(
-        "Subject Type चुनें", list(SUBJECT_TYPE_FIELDS.keys()), key="p3_subject_type",
-        help="S.N. / DEPARTMENT / NAME / MOBILE NO. सब Subject Type बदलने पर भी same रहते हैं — "
-             "सिर्फ़ 'Allotted Class' + 'SERIAL NO.' का data अलग-अलग Subject Type के लिए अलग column में save होता है।")
+    _p3_subj_type = "Major Subject"
     _p3_fields = SUBJECT_TYPE_FIELDS[_p3_subj_type]
     _p3_class_col, _p3_serial_col, _p3_total_col = _p3_fields["class"], _p3_fields["serial"], _p3_fields["total"]
     _p3_branch_col = _p3_fields["branch"]
 
     with st.expander("📤 फ़ाइल से List अपलोड करें (Excel / CSV)", expanded=_fac.empty):
         faculty_upload_ui("p3")
-
-    with st.expander("🏢 DEPARTMENT की List (नीचे DEPARTMENT dropdown में यही दिखती हैं)"):
-        st.caption("अभी की Departments: " + (", ".join(st.session_state.departments) or "—")
-                   + ".  नाम बदलने / हटाने / पूरी List बदलने के लिए **P6 → Departments** खोलें।")
-        _qd1, _qd2 = st.columns([3, 1])
-        with _qd1:
-            _quick_dept = st.text_input("नया Department जोड़ें", key="p3_quick_dept", placeholder="जैसे: Commerce")
-        with _qd2:
-            st.write("")
-            _quick_add = st.button("➕ जोड़ें", key="p3_quick_dept_btn", use_container_width=True)
-        if _quick_add:
-            _qn = _quick_dept.strip()
-            if not _qn:
-                st.warning("⚠️ नाम खाली है।")
-            elif _qn in st.session_state.departments:
-                st.warning("⚠️ यह Department पहले से मौजूद है।")
-            else:
-                _dl2 = list(st.session_state.departments) + [_qn]
-                st.session_state.departments = _dl2
-                save_departments(_dl2)
-                st.session_state["p3_fac_flash"] = f"✅ Department '{_qn}' जुड़ गया — अब DEPARTMENT dropdown में चुन सकते हैं।"
-                st.rerun()
 
     st.caption("यहाँ से आप Text बदल सकते हैं, नई Row जोड़ सकते हैं (टेबल के नीचे ➕) और Row हटा सकते हैं "
                "(Row चुनकर 🗑️)। बदलाव के बाद **💾 Save Changes** ज़रूर दबाएँ। "
