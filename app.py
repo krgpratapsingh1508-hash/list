@@ -1795,30 +1795,12 @@ elif choice == "P5 — Print Panel":
 
     st.markdown("---")
 
-    # ---- Data selection ----
-    st.subheader("📂 Data चुनें")
-    d_col1, d_col2, d_col3 = st.columns([1, 1, 2])
-    with d_col1:
-        status_choice = st.selectbox("Status", ["सभी", "Approved", "Pending"], index=0)
-    with d_col2:
-        if role == "admin":
-            dept_choice = st.selectbox("Department", ["सभी"] + st.session_state.departments)
-        else:
-            dept_choice = user_dept
-            st.caption(f"Department: **{user_dept}**")
-    with d_col3:
-        pp_search = st.text_input("🔎 Student Name / Roll No. / Unique ID से खोजें", key="pp_search")
-
-    pp_view = db.copy()  # P5 ab poore database se list uthata hai (Show In Panels filter nahi lagta)
-    if status_choice != "सभी":
-        pp_view = pp_view[pp_view["Status"].astype(str).str.strip().str.lower() == status_choice.lower()]
+    # ---- Data: P5 poore database se list uthata hai (Status / Department / Search ke filters hata diye gaye hain).
+    # Sirf non-admin user ko uske apne Department ke records hi milte hain. ----
+    pp_view = db.copy()
     if role != "admin":
         pp_view = pp_view[pp_view["Assigned Department"] == user_dept]
-    elif dept_choice != "सभी":
-        pp_view = pp_view[pp_view["Assigned Department"] == dept_choice]
-    if pp_search.strip():
-        s = pp_search.strip().lower()
-        pp_view = pp_view[pp_view.apply(lambda r: s in " ".join(str(v).lower() for v in r.values), axis=1)]
+        st.caption(f"Department: **{user_dept}**")
 
     # ---- Upar jo Guardian Tutor चुना गया hai, usi ko P3 me जो Students Assign हुए थे
     # (P3 → Actions → 📌 Assign se "Assigned Tutor" field bharti hai) — unhi ki List seedhe yahan aa jaye ----
