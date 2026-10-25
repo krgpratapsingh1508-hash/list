@@ -1239,12 +1239,13 @@ elif choice == "P3 — Guardian Tutors List":
     def _p3_match(df, col, val):
         if not val or col not in df.columns:
             return df
-        return df[df[col].astype(str).apply(lambda v: val in [x.strip() for x in v.split(",")])]
+        return df[df[col].astype(str).str.strip() == val]
 
     def _p3_uniq(df, col, norm=None):
         if col not in df.columns:
             return []
-        vals = [v.strip() for sub in df[col].astype(str).str.split(",") for v in sub if v.strip()]
+        # Value ko comma par todna nahi hai — Branch ke naam me khud comma ho sakta hai (jaise "B. Com in Banking, Financial Services ...")
+        vals = [v.strip() for v in df[col].astype(str) if v.strip()]
         if norm:
             vals = [norm(v) for v in vals]
         return list(dict.fromkeys(sorted(vals)))
