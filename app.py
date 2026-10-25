@@ -1231,6 +1231,25 @@ elif choice == "P3 — Guardian Tutors List":
                                mime="text/csv", use_container_width=True, type="primary",
                                help="इस फ़ाइल को बाद में P3 → '📤 फ़ाइल से List अपलोड करें' में डालने पर पूरी List (सभी Subject Types समेत) वापस आ जाएगी।")
 
+    # Degree / Branch / Year ke dropdown — options P2 ki List (database) ke "Degree", "Branch", "Current Year" columns se aate hain
+    def _p3_uniq(col, norm=None):
+        if col not in db.columns:
+            return []
+        vals = [v.strip() for sub in db[col].astype(str).str.split(",") for v in sub if v.strip()]
+        if norm:
+            vals = [norm(v) for v in vals]
+        return list(dict.fromkeys(sorted(vals)))
+
+    _p3_deg_base = _p3_uniq("Degree")
+    _p3_br_base = _p3_uniq("Branch")
+    _p3_yr_found = _p3_uniq("Current Year", normalize_course_year)
+    _p3_yr_base = ([y for y in COURSE_YEAR_OPTIONS if y in _p3_yr_found]
+                   + [y for y in _p3_yr_found if y not in COURSE_YEAR_OPTIONS]) or list(COURSE_YEAR_OPTIONS)
+
+    def _p3_opts(base, extra=""):
+        extra = str(extra).strip()
+        return [""] + list(base) + ([extra] if extra and extra not in base else [])
+
     # ----------------------------------------------------------------
     # ➕ NAYA TUTOR JODEIN
     # ----------------------------------------------------------------
@@ -1246,16 +1265,17 @@ elif choice == "P3 — Guardian Tutors List":
                         "एक से ज़्यादा Class हों तो नीचे ➕ से और जोड़ी जोड़ें (जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा)")
             _n_cls_vals, _n_srl_vals, _n_br_vals = [], [], []
             for _ci in range(st.session_state["p3_add_cls_n"]):
-                _cc1, _cc1y, _cc3, _cc2 = st.columns(4)
+                _cc1, _cc3, _cc1y, _cc2 = st.columns(4)
                 with _cc1:
-                    _n_deg = st.text_input(f"Degree {_ci + 1}", key=f"p3_add_cls_{_ci}",
-                                           help="जैसे 'PGDCA', 'B.Com.'" if _ci == 0 else "")
-                with _cc1y:
-                    _n_yr = st.selectbox(f"Year {_ci + 1}", [""] + COURSE_YEAR_OPTIONS, key=f"p3_add_yr_{_ci}")
-                _n_cls_vals.append(f"{_n_deg.strip()} {_n_yr}".strip())
+                    _n_deg = st.selectbox(f"Degree {_ci + 1}", _p3_opts(_p3_deg_base), key=f"p3_add_cls_{_ci}",
+                                          help="P2 की List के Degree column से" if _ci == 0 else None)
                 with _cc3:
-                    _n_br_vals.append(st.text_input(f"Branch {_ci + 1}", key=f"p3_add_br_{_ci}",
-                                                     help="जैसे 'Commerce'" if _ci == 0 else ""))
+                    _n_br_vals.append(st.selectbox(f"Branch {_ci + 1}", _p3_opts(_p3_br_base), key=f"p3_add_br_{_ci}",
+                                                    help="P2 की List के Branch column से" if _ci == 0 else None))
+                with _cc1y:
+                    _n_yr = st.selectbox(f"Year {_ci + 1}", _p3_opts(_p3_yr_base), key=f"p3_add_yr_{_ci}",
+                                         help="P2 की List के Current Year column से" if _ci == 0 else None)
+                _n_cls_vals.append(f"{_n_deg.strip()} {_n_yr}".strip())
                 with _cc2:
                     _n_srl_vals.append(st.text_input(f"SERIAL NO. {_ci + 1}", key=f"p3_add_srl_{_ci}",
                                                       help="जैसे '1-10'" if _ci == 0 else ""))
@@ -1339,20 +1359,23 @@ elif choice == "P3 — Guardian Tutors List":
                         "जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा")
             _e_cls_vals, _e_srl_vals, _e_br_vals = [], [], []
             for _ci in range(st.session_state[_ecls_key]):
-                _ecc1, _ecc1y, _ecc3, _ecc2 = st.columns(4)
+                _ecc1, _ecc3, _ecc1y, _ecc2 = st.columns(4)
                 with _ecc1:
-                    _default_c = st.session_state.get(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}", "")
-                    _e_deg = st.text_input(f"Degree {_ci + 1}", value=_default_c,
-                                           key=f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}",
-                                           help="जैसे 'PGDCA', 'B.Com.'" if _ci == 0 else "")
-                with _ecc1y:
-                    _e_yr = st.selectbox(f"Year {_ci + 1}", [""] + COURSE_YEAR_OPTIONS,
-                                         key=f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}")
-                _e_cls_vals.append(f"{_e_deg.strip()} {_e_yr}".strip())
+                    _e_deg = st.selectbox(
+                        f"Degree {_ci + 1}",
+                        _p3_opts(_p3_deg_base, st.session_state.get(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}", "")),
+                        key=f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}")
                 with _ecc3:
-                    _default_b = st.session_state.get(f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}", "")
-                    _e_br_vals.append(st.text_input(f"Branch {_ci + 1}", value=_default_b,
-                                                     key=f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}"))
+                    _e_br_vals.append(st.selectbox(
+                        f"Branch {_ci + 1}",
+                        _p3_opts(_p3_br_base, st.session_state.get(f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}", "")),
+                        key=f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}"))
+                with _ecc1y:
+                    _e_yr = st.selectbox(
+                        f"Year {_ci + 1}",
+                        _p3_opts(_p3_yr_base, st.session_state.get(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}", "")),
+                        key=f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}")
+                _e_cls_vals.append(f"{_e_deg.strip()} {_e_yr}".strip())
                 with _ecc2:
                     _default_s = st.session_state.get(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}", "")
                     _e_srl_vals.append(st.text_input(f"SERIAL NO. {_ci + 1}", value=_default_s,
