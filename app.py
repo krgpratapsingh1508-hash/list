@@ -304,6 +304,14 @@ def _p3_compress(nums):
     return ", ".join(parts)
 
 
+def _p3_compose_serial(f, t):
+    """FROM SERIAL NO. + TO SERIAL NO. -> '1-10' (dono same ho to '5', sirf FROM ho to bhi '5')"""
+    f, t = str(f).strip(), str(t).strip()
+    if f and t:
+        return f if f == t else f"{f}-{t}"
+    return f if f else (f"-{t}" if t else "")
+
+
 def load_faculty():
     if os.path.exists(FACULTY_FILE):
         try:
@@ -1389,7 +1397,7 @@ elif choice == "P3 — Guardian Tutors List":
                 continue
             _ranges, _bad = _p3_parse_ranges(_srl)
             if _bad:
-                errs.append(f"'{_srl}' सही Serial No. नहीं है — ऐसे लिखें: 1-10 (या 1-10, 15-20)।")
+                errs.append(f"'{_srl}' सही Serial No. नहीं है — FROM और TO में सिर्फ़ अंक (number) भरें, और TO, FROM से छोटा न हो।")
                 continue
             _key = _p3_class_key(_c, _b)
             if not all(_key):
@@ -1426,7 +1434,7 @@ elif choice == "P3 — Guardian Tutors List":
                         "एक से ज़्यादा Class हों तो नीचे ➕ से और जोड़ी जोड़ें (जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा)")
             _n_cls_vals, _n_srl_vals, _n_br_vals = [], [], []
             for _ci in range(st.session_state["p3_add_cls_n"]):
-                _cc1, _cc3, _cc1y, _cc2 = st.columns(4)
+                _cc1, _cc3, _cc1y, _cc2, _cc2b = st.columns(5)
                 with _cc1:
                     _n_deg = st.selectbox(f"Degree {_ci + 1}", _p3_opts(_p3_deg_base), key=f"p3_add_cls_{_ci}",
                                           help="P2 की List के Degree column से" if _ci == 0 else None)
@@ -1443,8 +1451,12 @@ elif choice == "P3 — Guardian Tutors List":
                                          help="चुने गए Degree + Branch का ही Year दिखेगा" if _ci == 0 else None)
                 _n_cls_vals.append(f"{_n_deg.strip()} {_n_yr}".strip())
                 with _cc2:
-                    _n_srl_vals.append(st.text_input(f"SERIAL NO. {_ci + 1}", key=f"p3_add_srl_{_ci}",
-                                                      help="जैसे '1-10' — यहाँ से यहाँ तक" if _ci == 0 else ""))
+                    _n_sf = st.text_input(f"FROM SERIAL NO. {_ci + 1}", key=f"p3_add_srl_{_ci}",
+                                          help="इस Serial से शुरू (जैसे 1)" if _ci == 0 else None)
+                with _cc2b:
+                    _n_st = st.text_input(f"TO SERIAL NO. {_ci + 1}", key=f"p3_add_srl_to_{_ci}",
+                                          help="इस Serial तक (जैसे 10)" if _ci == 0 else None)
+                _n_srl_vals.append(_p3_compose_serial(_n_sf, _n_st))
                 _p3_serial_panel(_n_deg, _n_br, _n_yr, None, f"add_{_ci}")
             _fb1, _fb2, _fb3 = st.columns(3)
             with _fb1:
@@ -1461,6 +1473,7 @@ elif choice == "P3 — Guardian Tutors List":
             _n_last = st.session_state["p3_add_cls_n"] - 1
             st.session_state.pop(f"p3_add_cls_{_n_last}", None)
             st.session_state.pop(f"p3_add_srl_{_n_last}", None)
+            st.session_state.pop(f"p3_add_srl_to_{_n_last}", None)
             st.session_state.pop(f"p3_add_br_{_n_last}", None)
             st.session_state.pop(f"p3_add_yr_{_n_last}", None)
             st.session_state["p3_add_cls_n"] -= 1
@@ -1509,19 +1522,34 @@ elif choice == "P3 — Guardian Tutors List":
                    "baaki Subject Types ka data chhua nahi jaayega.")
         _ecls_key = f"p3_edit_cls_n_{_eidx}_{_p3_subj_type}"
         if _ecls_key not in st.session_state:
-            _existing_cls = [c for c in _erow[_p3_class_col].split("\n")]
-            _existing_srl = [s for s in _erow[_p3_serial_col].split("\n")]
-            _existing_br = [b for b in str(_erow[_p3_branch_col]).split("\n")]
-            _n_pairs_init = max(1, len(_existing_cls), len(_existing_srl), len(_existing_br))
+            _raw_cls = [c for c in _erow[_p3_class_col].split("\n")]
+            _raw_srl = [x for x in _erow[_p3_serial_col].split("\n")]
+            _raw_br = [b for b in str(_erow[_p3_branch_col]).split("\n")]
+            # Ek line me ek se zyada Serial range ho (jaise "1-10, 15-20") to har range ki alag line banti hai
+            _existing_cls, _existing_br, _existing_from, _existing_to = [], [], [], []
+            for _i in range(max(1, len(_raw_cls), len(_raw_srl), len(_raw_br))):
+                _c = _raw_cls[_i] if _i < len(_raw_cls) else ""
+                _b = _raw_br[_i] if _i < len(_raw_br) else ""
+                _sr = _raw_srl[_i] if _i < len(_raw_srl) else ""
+                _rg, _bad = _p3_parse_ranges(_sr)
+                if _bad or not _rg:
+                    _pieces = [(_sr.strip(), "")]
+                else:
+                    _pieces = [(str(x), str(y)) for x, y in _rg]
+                for _pf, _pt in _pieces:
+                    _existing_cls.append(_c); _existing_br.append(_b)
+                    _existing_from.append(_pf); _existing_to.append(_pt)
+            _n_pairs_init = len(_existing_cls)
             st.session_state[_ecls_key] = _n_pairs_init
             for _ci in range(_n_pairs_init):
-                _ex_deg, _ex_yr = parse_allotted_class(_existing_cls[_ci] if _ci < len(_existing_cls) else "")
+                _ex_deg, _ex_yr = parse_allotted_class(_existing_cls[_ci])
                 st.session_state[f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}"] = _ex_deg
                 st.session_state[f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}"] = _ex_yr if _ex_yr in COURSE_YEAR_OPTIONS else ""
                 st.session_state[f"p3_edit_orig_{_eidx}_{_p3_subj_type}_{_ci}"] = (
-                    _ex_deg, (_existing_br[_ci] if _ci < len(_existing_br) else ""), _ex_yr if _ex_yr in COURSE_YEAR_OPTIONS else "")
-                st.session_state[f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_srl[_ci] if _ci < len(_existing_srl) else ""
-                st.session_state[f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_br[_ci] if _ci < len(_existing_br) else ""
+                    _ex_deg, _existing_br[_ci], _ex_yr if _ex_yr in COURSE_YEAR_OPTIONS else "")
+                st.session_state[f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_from[_ci]
+                st.session_state[f"p3_edit_srl_to_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_to[_ci]
+                st.session_state[f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_br[_ci]
         with st.container():
             _e_name = st.text_input("NAME OF GUARDIANS TUTORS", value=_erow["Faculty Name"])
             _e_mob = st.text_input("MOBILE NO.", value=_erow["Mobile Number"])
@@ -1532,7 +1560,7 @@ elif choice == "P3 — Guardian Tutors List":
                         "जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा")
             _e_cls_vals, _e_srl_vals, _e_br_vals = [], [], []
             for _ci in range(st.session_state[_ecls_key]):
-                _ecc1, _ecc3, _ecc1y, _ecc2 = st.columns(4)
+                _ecc1, _ecc3, _ecc1y, _ecc2, _ecc2b = st.columns(5)
                 _orig = st.session_state.get(f"p3_edit_orig_{_eidx}_{_p3_subj_type}_{_ci}", ("", "", ""))
                 with _ecc1:
                     _e_deg = st.selectbox(f"Degree {_ci + 1}", _p3_opts(_p3_deg_base, _orig[0]),
@@ -1548,9 +1576,10 @@ elif choice == "P3 — Guardian Tutors List":
                     _e_yr = st.selectbox(f"Year {_ci + 1}", _o, key=f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}")
                 _e_cls_vals.append(f"{_e_deg.strip()} {_e_yr}".strip())
                 with _ecc2:
-                    _default_s = st.session_state.get(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}", "")
-                    _e_srl_vals.append(st.text_input(f"SERIAL NO. {_ci + 1}", value=_default_s,
-                                                      key=f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}"))
+                    _e_sf = st.text_input(f"FROM SERIAL NO. {_ci + 1}", key=f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}")
+                with _ecc2b:
+                    _e_st = st.text_input(f"TO SERIAL NO. {_ci + 1}", key=f"p3_edit_srl_to_{_eidx}_{_p3_subj_type}_{_ci}")
+                _e_srl_vals.append(_p3_compose_serial(_e_sf, _e_st))
                 _p3_serial_panel(_e_deg, _e_br, _e_yr, _eidx, f"edit_{_eidx}_{_ci}")
             st.caption("ℹ️ TOTAL NUMBER OF STUDENTS Save karne par SERIAL NO. se apne aap calculate ho jayega — "
                        "abhi ke hisaab se: **" + (_p3_total_from_serial(_erow[_p3_serial_col]) or _erow[_p3_total_col] or "—") + "**")
@@ -1573,7 +1602,8 @@ elif choice == "P3 — Guardian Tutors List":
             for _k in [k for k in list(st.session_state.keys())
                        if k.startswith(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_") or k.startswith(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_")
                        or k.startswith(f"p3_edit_br_{_eidx}_{_p3_subj_type}_") or k.startswith(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_")
-                       or k.startswith(f"p3_edit_orig_{_eidx}_{_p3_subj_type}_")]:
+                       or k.startswith(f"p3_edit_orig_{_eidx}_{_p3_subj_type}_")
+                       or k.startswith(f"p3_edit_srl_to_{_eidx}_{_p3_subj_type}_")]:
                 st.session_state.pop(_k, None)
 
         if _e_add_cls:
@@ -1583,6 +1613,7 @@ elif choice == "P3 — Guardian Tutors List":
             _e_last = st.session_state[_ecls_key] - 1
             st.session_state.pop(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state.pop(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_e_last}", None)
+            st.session_state.pop(f"p3_edit_srl_to_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state.pop(f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state.pop(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state[_ecls_key] -= 1
