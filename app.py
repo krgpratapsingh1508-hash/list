@@ -1192,6 +1192,35 @@ elif choice == "P3 — Guardian Tutors List":
         _dl = _fac.reset_index(drop=True).copy()
         _dl.insert(0, "S.N.", range(1, len(_dl) + 1))
         _dl["Mobile Number"] = _dl["Mobile Number"].map(lambda v: "" if str(v).strip("_ ").strip() == "" else v)
+        # ---- 🖨️ Print: P3 ki List ko seedha browser Print dialog se print karna ----
+        import html as _html
+        _pr_rows = []
+        for _pi, _pr in _fac.reset_index(drop=True).iterrows():
+            _dg_l, _yr_l = [], []
+            for _cl in str(_pr[_p3_class_col]).split("\n"):
+                if _cl.strip():
+                    _dg, _yr = parse_allotted_class(_cl)
+                    _dg_l.append(_dg or _cl.strip())
+                    _yr_l.append(_yr or "")
+            _mob = str(_pr["Mobile Number"]).strip()
+            _tot = _p3_total_from_serial(_pr[_p3_serial_col]) or str(_pr[_p3_total_col]).strip()
+            _ml = lambda v: "<br>".join(_html.escape(x.strip()) for x in str(v).split("\n"))
+            _pr_rows.append(
+                "<tr>" + "".join(f"<td>{c}</td>" for c in [
+                    _pi + 1, _html.escape(str(_pr["Faculty Name"]).strip()), _html.escape(str(_pr["Tutor Department"]).strip()),
+                    _html.escape(_mob) or MOBILE_BLANK, "<br>".join(_html.escape(x) for x in _dg_l),
+                    _ml(_pr[_p3_branch_col]), "<br>".join(_html.escape(x) for x in _yr_l),
+                    _ml(_pr[_p3_serial_col]), _html.escape(_tot)]) + "</tr>")
+        _pr_head = "".join(f"<th>{h}</th>" for h in ["S.No.", "Name of Faculty", "Department", "Mobile No.", "Degree",
+                                                       "Major Subject" if _p3_subj_type == "Major Subject" else "Branch",
+                                                       "Year", "Serial No.", "Total Number of Students"])
+        _pr_title = _html.escape(st.session_state.get("ph_line1", "") or "")
+        _pr_html = (f'<div style="text-align:center; font-family:Arial,sans-serif; margin-bottom:10px;">'
+                    f'<div style="font-weight:700; font-size:18px;">{_pr_title}</div>'
+                    f'<div style="font-weight:600; font-size:15px; margin-top:4px;">LIST OF GUARDIAN TUTORS</div></div>'
+                    f'<table><thead><tr>{_pr_head}</tr></thead><tbody>{"".join(_pr_rows)}</tbody></table>')
+        print_button(_pr_html, label="🖨️ Print करें (यह List)")
+
         _dlc1, _dlc2 = st.columns(2)
         with _dlc1:
             st.download_button("⬇️ CSV Download करें (सिर्फ़ देखने/print के लिए)", _dl.to_csv(index=False).encode("utf-8-sig"),
