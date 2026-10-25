@@ -230,16 +230,18 @@ FACULTY_COLUMNS = [
     "Vocational Class", "Vocational Serial No", "Vocational Number of Students",
     "MDC Class", "MDC Serial No", "MDC Number of Students",
     "PWApCE Class", "PWApCE Serial No", "PWApCE Number of Students",
+    # Branch (har Class-line ke saath ek line) — Degree aur Year "Allotted Class" text se alag karke dikhaye jaate hain
+    "Branch", "Minor Branch", "Vocational Branch", "MDC Branch", "PWApCE Branch",
 ]
 
 # Subject Type चुनें dropdown se ye तय होता है ki List Table aur Add/Edit form me
 # "Allotted Class" + "SERIAL NO." + "TOTAL" kis column-set ko padhein/likhein
 SUBJECT_TYPE_FIELDS = {
-    "Major Subject":       {"class": "Department",     "serial": "Serial No",           "total": "Number of Students"},
-    "Minor Subjects":      {"class": "Minor Class",     "serial": "Minor Serial No",     "total": "Minor Number of Students"},
-    "Vocational Subjects": {"class": "Vocational Class","serial": "Vocational Serial No","total": "Vocational Number of Students"},
-    "MDC Subjects":        {"class": "MDC Class",       "serial": "MDC Serial No",       "total": "MDC Number of Students"},
-    "PW/Ap/CE Subjects":   {"class": "PWApCE Class",    "serial": "PWApCE Serial No",    "total": "PWApCE Number of Students"},
+    "Major Subject":       {"class": "Department", "branch": "Branch",     "serial": "Serial No",           "total": "Number of Students"},
+    "Minor Subjects":      {"class": "Minor Class", "branch": "Minor Branch",     "serial": "Minor Serial No",     "total": "Minor Number of Students"},
+    "Vocational Subjects": {"class": "Vocational Class", "branch": "Vocational Branch","serial": "Vocational Serial No","total": "Vocational Number of Students"},
+    "MDC Subjects":        {"class": "MDC Class", "branch": "MDC Branch",       "serial": "MDC Serial No",       "total": "MDC Number of Students"},
+    "PW/Ap/CE Subjects":   {"class": "PWApCE Class", "branch": "PWApCE Branch",    "serial": "PWApCE Serial No",    "total": "PWApCE Number of Students"},
 }
 
 
@@ -704,11 +706,11 @@ def faculty_upload_ui(key_prefix):
                "Designation, Mobile Number वैकल्पिक हैं। ⚠️ नई फ़ाइल पुरानी List को replace कर देगी।")
     # Upload Format (Template): khaali format + 2 sample rows — isi columns ke hisaab se apna data bharke upload karein
     _tpl = pd.DataFrame([
-        {"S.N.": "1", "Department": "Commerce", "Name of Guardians Tutors": "Dr. Sample Name",
-         "Mobile No.": "9876543210", "Allotted Class": "B.Com. I Year", "Serial No": "1-10", "Number of Student": "10"},
-        {"S.N.": "2", "Department": "Computer Science", "Name of Guardians Tutors": "Dr. Sample Two",
-         "Mobile No.": "9123456780", "Allotted Class": "PGDCA I Year\nPGDCA II Year", "Serial No": "11-20\n1-5",
-         "Number of Student": "15"},
+        {"S.No.": "1", "Name of Faculty": "Dr. Sample Name", "Department": "Commerce", "Mobile No.": "9876543210",
+         "Degree": "B.Com.", "Branch": "Commerce", "Year": "1st Year", "Serial No": "1-10", "Total Number of Students": "10"},
+        {"S.No.": "2", "Name of Faculty": "Dr. Sample Two", "Department": "Computer Science", "Mobile No.": "9123456780",
+         "Degree": "PGDCA\nPGDCA", "Branch": "Computer Science\nComputer Science", "Year": "1st Year\n2nd Year",
+         "Serial No": "11-20\n1-5", "Total Number of Students": "15"},
     ])
     st.download_button(
         "📥 Upload Format (Template) Download करें", _tpl.to_csv(index=False).encode("utf-8-sig"),
@@ -716,7 +718,7 @@ def faculty_upload_ui(key_prefix):
         help="इस फ़ाइल में दिए columns वैसे ही रखें, Sample rows हटाकर अपना data भरें, फिर नीचे Upload करें। "
              "एक Tutor की एक से ज़्यादा Class हों तो Allotted Class और Serial No में हर Class नई लाइन (Excel में Alt+Enter) पर लिखें।")
     st.caption("ℹ️ Template में 2 Sample rows हैं (दूसरी row में एक Tutor की 2 Class दिखाई गई हैं) — इन्हें हटाकर अपना data भरें। "
-               "Department = Tutor का Department, Allotted Class = Major Subject की Class। "
+               "Department = Tutor का Department; Degree + Year मिलकर Major Subject की Allotted Class बनते हैं। "
                "Minor/Vocational/MDC/PW-Ap-CE का data इस Template में नहीं आता — वह P3 में Subject Type चुनकर भरें, "
                "और पूरी List का Backup/Restore '💾 Backup Export' से करें।")
     fac_file = st.file_uploader("Guardian Tutors List फ़ाइल चुनें", type=["csv", "xlsx", "xls"], key=f"{key_prefix}_fac_upload")
@@ -747,18 +749,34 @@ def faculty_upload_ui(key_prefix):
             fac_rename[col] = "Tutor Department"           # naya DEPARTMENT column
         elif key in ("facultyname", "faculty", "teachername", "mentorname", "tutorname", "guardiantutorname",
                      "nameofguardianstutors", "nameofguardiantutor", "guardianstutors", "guardiantutors",
-                     "nameofguardian", "nameofguardianstutor", "guardiantutor", "nameofguardiantutors"):
+                     "nameofguardian", "nameofguardianstutor", "guardiantutor", "nameofguardiantutors",
+                     "nameoffaculty", "nameoffacultymember"):
             fac_rename[col] = "Faculty Name"
         elif key in ("designation", "post", "role"):
             fac_rename[col] = "Designation"
         elif key in ("mobilenumber", "mobileno", "mobile", "phone", "phonenumber", "contactno", "mobno"):
             fac_rename[col] = "Mobile Number"
+        elif key == "degree":
+            fac_rename[col] = "Degree"                      # temporary — neeche Allotted Class me jud jaayega
+        elif key in ("year", "currentyear", "classyear", "courseyear"):
+            fac_rename[col] = "Year"                        # temporary — neeche Allotted Class me jud jaayega
+        elif key in ("branch", "branchname", "majorsubject", "majorbranch"):
+            fac_rename[col] = "Branch"
         elif key in ("serialno", "serialnumber", "srno", "serial", "serialnos"):
             fac_rename[col] = "Serial No"
         elif key in ("numberofstudent", "numberofstudents", "totalstudents", "studentcount", "noofstudents",
-                     "nostudents", "noofstudent"):
+                     "nostudents", "noofstudent", "totalnumberofstudents", "totalnumberofstudent"):
             fac_rename[col] = "Number of Students"
     fac_raw = fac_raw.rename(columns=fac_rename)
+    # Degree + Year columns ho to unhe jodkar "Allotted Class" (jaise "PGDCA 1st Year") banao — line-by-line
+    # (ek cell me ek se zyada Class nayi line par likhi ho to har line apne Year ke saath judti hai)
+    if not _is_backup_format and ("Degree" in fac_raw.columns or "Year" in fac_raw.columns) and "Department" not in fac_raw.columns:
+        def _join_deg_year(r):
+            _dl = str(r.get("Degree", "")).split("\n")
+            _yl = [normalize_course_year(y) for y in str(r.get("Year", "")).split("\n")]
+            return "\n".join(f"{(_dl[i] if i < len(_dl) else '').strip()} {(_yl[i] if i < len(_yl) else '').strip()}".strip()
+                             for i in range(max(len(_dl), len(_yl))))
+        fac_raw["Department"] = fac_raw.apply(_join_deg_year, axis=1)
 
     if "Faculty Name" not in fac_raw.columns or not ({"Department", "Tutor Department"} & set(fac_raw.columns)):
         st.error("❌ फ़ाइल में 'Name of Guardians Tutors' (या 'Faculty Name') और 'Department' या 'Allotted Class' "
@@ -1105,6 +1123,7 @@ elif choice == "P3 — Guardian Tutors List":
              "सिर्फ़ 'Allotted Class' + 'SERIAL NO.' का data अलग-अलग Subject Type के लिए अलग column में save होता है।")
     _p3_fields = SUBJECT_TYPE_FIELDS[_p3_subj_type]
     _p3_class_col, _p3_serial_col, _p3_total_col = _p3_fields["class"], _p3_fields["serial"], _p3_fields["total"]
+    _p3_branch_col = _p3_fields["branch"]
 
     with st.expander("📤 फ़ाइल से List अपलोड करें (Excel / CSV)", expanded=_fac.empty):
         faculty_upload_ui("p3")
@@ -1154,9 +1173,9 @@ elif choice == "P3 — Guardian Tutors List":
     if _fac.empty:
         st.info("📭 अभी List खाली है — ऊपर से फ़ाइल अपलोड करें, या नीचे ➕ से नया Tutor जोड़ें।")
     else:
-        _col_widths = [0.5, 1.3, 2.2, 1.3, 1.3, 1.2, 1.3, 1.3]
-        _headers = ["S.N.", "DEPARTMENT", "NAME OF GUARDIANS TUTORS", "MOBILE NO.",
-                    f"Allotted Class ({_p3_subj_type})", "SERIAL NO.", "TOTAL NUMBER OF STUDENTS", "⚙️ Actions"]
+        _col_widths = [0.5, 2.0, 1.3, 1.2, 1.0, 1.3, 1.0, 1.1, 1.1, 1.2]
+        _headers = ["S.No.", "Name of Faculty", "Department", "Mobile No.", "Degree", "Branch", "Year",
+                    "Serial No.", "Total Number of Students", "⚙️ Actions"]
         _hcols = st.columns(_col_widths)
         for _hc, _htxt in zip(_hcols, _headers):
             _hc.markdown(f"**{_htxt}**")
@@ -1167,13 +1186,22 @@ elif choice == "P3 — Guardian Tutors List":
             _tot_disp = _p3_total_from_serial(_arow[_p3_serial_col]) or _arow[_p3_total_col] or "—"
             _rc = st.columns(_col_widths)
             _rc[0].write(_aidx + 1)
-            _rc[1].write(_arow["Tutor Department"].strip() or "—")
-            _rc[2].write(_arow["Faculty Name"].strip() or "(बिना नाम)")
+            # Degree aur Year — Allotted Class text (jaise "PGDCA I Year") se alag-alag nikalte hain, har line ke liye
+            _deg_lines, _yr_lines = [], []
+            for _cl in str(_arow[_p3_class_col]).split("\n"):
+                if _cl.strip():
+                    _dg, _yr = parse_allotted_class(_cl)
+                    _deg_lines.append(_dg or _cl.strip())
+                    _yr_lines.append(_yr or "—")
+            _rc[1].write(_arow["Faculty Name"].strip() or "(बिना नाम)")
+            _rc[2].write(_arow["Tutor Department"].strip() or "—")
             _rc[3].write(_mob_disp)
-            _rc[4].markdown((_arow[_p3_class_col].replace("\n", "  \n") or "—"))
-            _rc[5].markdown((_arow[_p3_serial_col].replace("\n", "  \n") or "—"))
-            _rc[6].write(_tot_disp)
-            with _rc[7]:
+            _rc[4].markdown("  \n".join(_deg_lines) or "—")
+            _rc[5].markdown(str(_arow[_p3_branch_col]).replace("\n", "  \n") or "—")
+            _rc[6].markdown("  \n".join(_yr_lines) or "—")
+            _rc[7].markdown((_arow[_p3_serial_col].replace("\n", "  \n") or "—"))
+            _rc[8].write(_tot_disp)
+            with _rc[9]:
                 _ea1, _ea2 = st.columns(2)
                 with _ea1:
                     if st.button("✏️", key=f"p3_edit_btn_{_aidx}", use_container_width=True, help="Edit"):
@@ -1216,12 +1244,15 @@ elif choice == "P3 — Guardian Tutors List":
             _n_mob = st.text_input("MOBILE NO.", key="p3_add_mob")
             st.markdown(f"**Allotted Class ({_p3_subj_type}) + SERIAL NO.** — हर Class के साथ उसका SERIAL NO. भी साथ में लिखें; "
                         "एक से ज़्यादा Class हों तो नीचे ➕ से और जोड़ी जोड़ें (जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा)")
-            _n_cls_vals, _n_srl_vals = [], []
+            _n_cls_vals, _n_srl_vals, _n_br_vals = [], [], []
             for _ci in range(st.session_state["p3_add_cls_n"]):
-                _cc1, _cc2 = st.columns(2)
+                _cc1, _cc3, _cc2 = st.columns(3)
                 with _cc1:
-                    _n_cls_vals.append(st.text_input(f"Allotted Class {_ci + 1}", key=f"p3_add_cls_{_ci}",
-                                                      help="जैसे '1st Year'" if _ci == 0 else ""))
+                    _n_cls_vals.append(st.text_input(f"Allotted Class {_ci + 1} (Degree + Year)", key=f"p3_add_cls_{_ci}",
+                                                      help="जैसे 'PGDCA I Year' — Degree और Year table में अलग-अलग दिखेंगे" if _ci == 0 else ""))
+                with _cc3:
+                    _n_br_vals.append(st.text_input(f"Branch {_ci + 1}", key=f"p3_add_br_{_ci}",
+                                                     help="जैसे 'Commerce'" if _ci == 0 else ""))
                 with _cc2:
                     _n_srl_vals.append(st.text_input(f"SERIAL NO. {_ci + 1}", key=f"p3_add_srl_{_ci}",
                                                       help="जैसे '1-10'" if _ci == 0 else ""))
@@ -1240,15 +1271,18 @@ elif choice == "P3 — Guardian Tutors List":
             _n_last = st.session_state["p3_add_cls_n"] - 1
             st.session_state.pop(f"p3_add_cls_{_n_last}", None)
             st.session_state.pop(f"p3_add_srl_{_n_last}", None)
+            st.session_state.pop(f"p3_add_br_{_n_last}", None)
             st.session_state["p3_add_cls_n"] -= 1
             st.rerun()
         if _n_save:
             if not _n_name.strip() and not _n_tdept.strip():
                 st.warning("⚠️ कम से कम NAME या DEPARTMENT भरें।")
             else:
-                _n_pairs = [(c.strip(), s.strip()) for c, s in zip(_n_cls_vals, _n_srl_vals) if c.strip() or s.strip()]
-                _n_cls_ml = "\n".join(c for c, s in _n_pairs)
-                _n_srl_ml = "\n".join(s for c, s in _n_pairs)
+                _n_pairs = [(c.strip(), s.strip(), b.strip()) for c, s, b in zip(_n_cls_vals, _n_srl_vals, _n_br_vals)
+                            if c.strip() or s.strip() or b.strip()]
+                _n_cls_ml = "\n".join(c for c, s, b in _n_pairs)
+                _n_srl_ml = "\n".join(s for c, s, b in _n_pairs)
+                _n_br_ml = "\n".join(b for c, s, b in _n_pairs)
                 _new_row = {col: "" for col in FACULTY_COLUMNS}
                 _new_row.update({
                     "Faculty Name": _n_name.strip(),
@@ -1257,12 +1291,13 @@ elif choice == "P3 — Guardian Tutors List":
                     "Tutor Department": _n_tdept.strip(),
                     _p3_class_col: _n_cls_ml,
                     _p3_serial_col: _n_srl_ml,
+                    _p3_branch_col: _n_br_ml,
                     _p3_total_col: _p3_total_from_serial(_n_srl_ml),
                 })
                 _fac2 = pd.concat([_fac, pd.DataFrame([_new_row])], ignore_index=True)
                 save_faculty(_fac2[FACULTY_COLUMNS])
                 for _k in [k for k in list(st.session_state.keys())
-                           if k.startswith("p3_add_cls_") or k.startswith("p3_add_srl_")]:
+                           if k.startswith("p3_add_cls_") or k.startswith("p3_add_srl_") or k.startswith("p3_add_br_")]:
                     st.session_state.pop(_k, None)
                 st.session_state["p3_add_cls_n"] = 1
                 st.session_state["p3_fac_flash"] = f"✅ '{_n_name.strip() or '(बिना नाम)'}' जुड़ गए।"
@@ -1278,13 +1313,15 @@ elif choice == "P3 — Guardian Tutors List":
                    "baaki Subject Types ka data chhua nahi jaayega.")
         _ecls_key = f"p3_edit_cls_n_{_eidx}_{_p3_subj_type}"
         if _ecls_key not in st.session_state:
-            _existing_cls = [c for c in _erow[_p3_class_col].split("\n") if c.strip()]
-            _existing_srl = [s for s in _erow[_p3_serial_col].split("\n") if s.strip()]
-            _n_pairs_init = max(1, len(_existing_cls), len(_existing_srl))
+            _existing_cls = [c for c in _erow[_p3_class_col].split("\n")]
+            _existing_srl = [s for s in _erow[_p3_serial_col].split("\n")]
+            _existing_br = [b for b in str(_erow[_p3_branch_col]).split("\n")]
+            _n_pairs_init = max(1, len(_existing_cls), len(_existing_srl), len(_existing_br))
             st.session_state[_ecls_key] = _n_pairs_init
             for _ci in range(_n_pairs_init):
                 st.session_state[f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_cls[_ci] if _ci < len(_existing_cls) else ""
                 st.session_state[f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_srl[_ci] if _ci < len(_existing_srl) else ""
+                st.session_state[f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_br[_ci] if _ci < len(_existing_br) else ""
         with st.form("p3_edit_form"):
             _e_name = st.text_input("NAME OF GUARDIANS TUTORS", value=_erow["Faculty Name"])
             _e_mob = st.text_input("MOBILE NO.", value=_erow["Mobile Number"])
@@ -1293,13 +1330,18 @@ elif choice == "P3 — Guardian Tutors List":
             _e_tdept = st.selectbox("DEPARTMENT", _e_dept_opts, index=_e_dept_idx)
             st.markdown(f"**Allotted Class ({_p3_subj_type}) + SERIAL NO.** — हर Class के साथ उसका SERIAL NO. भी साथ में लिखें; "
                         "जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा")
-            _e_cls_vals, _e_srl_vals = [], []
+            _e_cls_vals, _e_srl_vals, _e_br_vals = [], [], []
             for _ci in range(st.session_state[_ecls_key]):
-                _ecc1, _ecc2 = st.columns(2)
+                _ecc1, _ecc3, _ecc2 = st.columns(3)
                 with _ecc1:
                     _default_c = st.session_state.get(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}", "")
-                    _e_cls_vals.append(st.text_input(f"Allotted Class {_ci + 1}", value=_default_c,
-                                                      key=f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}"))
+                    _e_cls_vals.append(st.text_input(f"Allotted Class {_ci + 1} (Degree + Year)", value=_default_c,
+                                                      key=f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}",
+                                                      help="जैसे 'PGDCA I Year'" if _ci == 0 else ""))
+                with _ecc3:
+                    _default_b = st.session_state.get(f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}", "")
+                    _e_br_vals.append(st.text_input(f"Branch {_ci + 1}", value=_default_b,
+                                                     key=f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}"))
                 with _ecc2:
                     _default_s = st.session_state.get(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}", "")
                     _e_srl_vals.append(st.text_input(f"SERIAL NO. {_ci + 1}", value=_default_s,
@@ -1323,7 +1365,8 @@ elif choice == "P3 — Guardian Tutors List":
         def _p3_edit_reset_cls_state():
             st.session_state.pop(_ecls_key, None)
             for _k in [k for k in list(st.session_state.keys())
-                       if k.startswith(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_") or k.startswith(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_")]:
+                       if k.startswith(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_") or k.startswith(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_")
+                       or k.startswith(f"p3_edit_br_{_eidx}_{_p3_subj_type}_")]:
                 st.session_state.pop(_k, None)
 
         if _e_add_cls:
@@ -1333,17 +1376,21 @@ elif choice == "P3 — Guardian Tutors List":
             _e_last = st.session_state[_ecls_key] - 1
             st.session_state.pop(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state.pop(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_e_last}", None)
+            st.session_state.pop(f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state[_ecls_key] -= 1
             st.rerun()
         if _e_save:
-            _e_pairs = [(c.strip(), s.strip()) for c, s in zip(_e_cls_vals, _e_srl_vals) if c.strip() or s.strip()]
-            _e_cls_ml = "\n".join(c for c, s in _e_pairs)
-            _e_srl_ml = "\n".join(s for c, s in _e_pairs)
+            _e_pairs = [(c.strip(), s.strip(), b.strip()) for c, s, b in zip(_e_cls_vals, _e_srl_vals, _e_br_vals)
+                        if c.strip() or s.strip() or b.strip()]
+            _e_cls_ml = "\n".join(c for c, s, b in _e_pairs)
+            _e_srl_ml = "\n".join(s for c, s, b in _e_pairs)
+            _e_br_ml = "\n".join(b for c, s, b in _e_pairs)
             _fac.loc[_eidx, "Faculty Name"] = _e_name.strip()
             _fac.loc[_eidx, "Mobile Number"] = _e_mob.strip()
             _fac.loc[_eidx, "Tutor Department"] = _e_tdept.strip()
             _fac.loc[_eidx, _p3_class_col] = _e_cls_ml
             _fac.loc[_eidx, _p3_serial_col] = _e_srl_ml
+            _fac.loc[_eidx, _p3_branch_col] = _e_br_ml
             _fac.loc[_eidx, _p3_total_col] = _p3_total_from_serial(_e_srl_ml) or _erow[_p3_total_col]
             save_faculty(_fac)
             _p3_edit_reset_cls_state()
