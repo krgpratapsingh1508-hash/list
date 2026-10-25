@@ -1231,24 +1231,40 @@ elif choice == "P3 — Guardian Tutors List":
                                mime="text/csv", use_container_width=True, type="primary",
                                help="इस फ़ाइल को बाद में P3 → '📤 फ़ाइल से List अपलोड करें' में डालने पर पूरी List (सभी Subject Types समेत) वापस आ जाएगी।")
 
-    # Degree / Branch / Year ke dropdown — options P2 ki List (database) ke "Degree", "Branch", "Current Year" columns se aate hain
-    def _p3_uniq(col, norm=None):
-        if col not in db.columns:
+    # Degree -> Branch -> Year: teeno dropdown P2 ki List (database) se aate hain aur ek doosre par depend karte hain —
+    # Degree chunne par sirf usi Degree ki Branch, Branch chunne par sirf usi (Degree + Branch) ka Year dikhta hai.
+    def _p3_match(df, col, val):
+        if not val or col not in df.columns:
+            return df
+        return df[df[col].astype(str).apply(lambda v: val in [x.strip() for x in v.split(",")])]
+
+    def _p3_uniq(df, col, norm=None):
+        if col not in df.columns:
             return []
-        vals = [v.strip() for sub in db[col].astype(str).str.split(",") for v in sub if v.strip()]
+        vals = [v.strip() for sub in df[col].astype(str).str.split(",") for v in sub if v.strip()]
         if norm:
             vals = [norm(v) for v in vals]
         return list(dict.fromkeys(sorted(vals)))
 
-    _p3_deg_base = _p3_uniq("Degree")
-    _p3_br_base = _p3_uniq("Branch")
-    _p3_yr_found = _p3_uniq("Current Year", normalize_course_year)
-    _p3_yr_base = ([y for y in COURSE_YEAR_OPTIONS if y in _p3_yr_found]
-                   + [y for y in _p3_yr_found if y not in COURSE_YEAR_OPTIONS]) or list(COURSE_YEAR_OPTIONS)
+    _p3_deg_base = _p3_uniq(db, "Degree")
+
+    def _p3_branch_base(deg):
+        return _p3_uniq(_p3_match(db, "Degree", deg), "Branch")
+
+    def _p3_year_base(deg, br):
+        sub = _p3_match(_p3_match(db, "Degree", deg), "Branch", br)
+        found = _p3_uniq(sub, "Current Year", normalize_course_year)
+        ordered = [y for y in COURSE_YEAR_OPTIONS if y in found] + [y for y in found if y not in COURSE_YEAR_OPTIONS]
+        return ordered or list(COURSE_YEAR_OPTIONS)
 
     def _p3_opts(base, extra=""):
         extra = str(extra).strip()
         return [""] + list(base) + ([extra] if extra and extra not in base else [])
+
+    def _p3_guard(key, opts):
+        # Upar wali choice badalne par agar neeche wali purani choice ab list me nahi hai to use khaali kar do
+        if st.session_state.get(key, "") not in opts:
+            st.session_state[key] = ""
 
     # ----------------------------------------------------------------
     # ➕ NAYA TUTOR JODEIN
@@ -1257,7 +1273,7 @@ elif choice == "P3 — Guardian Tutors List":
         _n_dept_opts = _dept_opts if _dept_opts else [""]
         if "p3_add_cls_n" not in st.session_state:
             st.session_state["p3_add_cls_n"] = 1
-        with st.form("p3_add_form", clear_on_submit=False):
+        with st.container():
             _n_tdept = st.selectbox("DEPARTMENT", _n_dept_opts, key="p3_add_tdept")
             _n_name = st.text_input("NAME OF GUARDIANS TUTORS", key="p3_add_name")
             _n_mob = st.text_input("MOBILE NO.", key="p3_add_mob")
@@ -1270,22 +1286,27 @@ elif choice == "P3 — Guardian Tutors List":
                     _n_deg = st.selectbox(f"Degree {_ci + 1}", _p3_opts(_p3_deg_base), key=f"p3_add_cls_{_ci}",
                                           help="P2 की List के Degree column से" if _ci == 0 else None)
                 with _cc3:
-                    _n_br_vals.append(st.selectbox(f"Branch {_ci + 1}", _p3_opts(_p3_br_base), key=f"p3_add_br_{_ci}",
-                                                    help="P2 की List के Branch column से" if _ci == 0 else None))
+                    _o = _p3_opts(_p3_branch_base(_n_deg))
+                    _p3_guard(f"p3_add_br_{_ci}", _o)
+                    _n_br = st.selectbox(f"Branch {_ci + 1}", _o, key=f"p3_add_br_{_ci}",
+                                         help="चुने गए Degree की ही Branch दिखेंगी" if _ci == 0 else None)
+                    _n_br_vals.append(_n_br)
                 with _cc1y:
-                    _n_yr = st.selectbox(f"Year {_ci + 1}", _p3_opts(_p3_yr_base), key=f"p3_add_yr_{_ci}",
-                                         help="P2 की List के Current Year column से" if _ci == 0 else None)
+                    _o = _p3_opts(_p3_year_base(_n_deg, _n_br))
+                    _p3_guard(f"p3_add_yr_{_ci}", _o)
+                    _n_yr = st.selectbox(f"Year {_ci + 1}", _o, key=f"p3_add_yr_{_ci}",
+                                         help="चुने गए Degree + Branch का ही Year दिखेगा" if _ci == 0 else None)
                 _n_cls_vals.append(f"{_n_deg.strip()} {_n_yr}".strip())
                 with _cc2:
                     _n_srl_vals.append(st.text_input(f"SERIAL NO. {_ci + 1}", key=f"p3_add_srl_{_ci}",
                                                       help="जैसे '1-10'" if _ci == 0 else ""))
             _fb1, _fb2, _fb3 = st.columns(3)
             with _fb1:
-                _n_save = st.form_submit_button("💾 जोड़ें", type="primary", use_container_width=True)
+                _n_save = st.button("💾 जोड़ें", type="primary", use_container_width=True, key="p3_add_save_btn")
             with _fb2:
-                _n_add_cls = st.form_submit_button("➕ Class + SERIAL जोड़ें", use_container_width=True)
+                _n_add_cls = st.button("➕ Class + SERIAL जोड़ें", use_container_width=True, key="p3_add_addcls_btn")
             with _fb3:
-                _n_rm_cls = st.form_submit_button("➖ Class + SERIAL हटाएँ", use_container_width=True,
+                _n_rm_cls = st.button("➖ Class + SERIAL हटाएँ", use_container_width=True, key="p3_add_rmcls_btn",
                                                     disabled=st.session_state["p3_add_cls_n"] <= 1)
         if _n_add_cls:
             st.session_state["p3_add_cls_n"] += 1
@@ -1347,9 +1368,11 @@ elif choice == "P3 — Guardian Tutors List":
                 _ex_deg, _ex_yr = parse_allotted_class(_existing_cls[_ci] if _ci < len(_existing_cls) else "")
                 st.session_state[f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}"] = _ex_deg
                 st.session_state[f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}"] = _ex_yr if _ex_yr in COURSE_YEAR_OPTIONS else ""
+                st.session_state[f"p3_edit_orig_{_eidx}_{_p3_subj_type}_{_ci}"] = (
+                    _ex_deg, (_existing_br[_ci] if _ci < len(_existing_br) else ""), _ex_yr if _ex_yr in COURSE_YEAR_OPTIONS else "")
                 st.session_state[f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_srl[_ci] if _ci < len(_existing_srl) else ""
                 st.session_state[f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}"] = _existing_br[_ci] if _ci < len(_existing_br) else ""
-        with st.form("p3_edit_form"):
+        with st.container():
             _e_name = st.text_input("NAME OF GUARDIANS TUTORS", value=_erow["Faculty Name"])
             _e_mob = st.text_input("MOBILE NO.", value=_erow["Mobile Number"])
             _e_dept_opts = _dept_opts if _dept_opts else [""]
@@ -1360,21 +1383,19 @@ elif choice == "P3 — Guardian Tutors List":
             _e_cls_vals, _e_srl_vals, _e_br_vals = [], [], []
             for _ci in range(st.session_state[_ecls_key]):
                 _ecc1, _ecc3, _ecc1y, _ecc2 = st.columns(4)
+                _orig = st.session_state.get(f"p3_edit_orig_{_eidx}_{_p3_subj_type}_{_ci}", ("", "", ""))
                 with _ecc1:
-                    _e_deg = st.selectbox(
-                        f"Degree {_ci + 1}",
-                        _p3_opts(_p3_deg_base, st.session_state.get(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}", "")),
-                        key=f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}")
+                    _e_deg = st.selectbox(f"Degree {_ci + 1}", _p3_opts(_p3_deg_base, _orig[0]),
+                                          key=f"p3_edit_cls_{_eidx}_{_p3_subj_type}_{_ci}")
                 with _ecc3:
-                    _e_br_vals.append(st.selectbox(
-                        f"Branch {_ci + 1}",
-                        _p3_opts(_p3_br_base, st.session_state.get(f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}", "")),
-                        key=f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}"))
+                    _o = _p3_opts(_p3_branch_base(_e_deg), _orig[1] if _e_deg == _orig[0] else "")
+                    _p3_guard(f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}", _o)
+                    _e_br = st.selectbox(f"Branch {_ci + 1}", _o, key=f"p3_edit_br_{_eidx}_{_p3_subj_type}_{_ci}")
+                    _e_br_vals.append(_e_br)
                 with _ecc1y:
-                    _e_yr = st.selectbox(
-                        f"Year {_ci + 1}",
-                        _p3_opts(_p3_yr_base, st.session_state.get(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}", "")),
-                        key=f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}")
+                    _o = _p3_opts(_p3_year_base(_e_deg, _e_br), _orig[2] if (_e_deg == _orig[0] and _e_br == _orig[1]) else "")
+                    _p3_guard(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}", _o)
+                    _e_yr = st.selectbox(f"Year {_ci + 1}", _o, key=f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}")
                 _e_cls_vals.append(f"{_e_deg.strip()} {_e_yr}".strip())
                 with _ecc2:
                     _default_s = st.session_state.get(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}", "")
@@ -1384,23 +1405,24 @@ elif choice == "P3 — Guardian Tutors List":
                        "abhi ke hisaab se: **" + (_p3_total_from_serial(_erow[_p3_serial_col]) or _erow[_p3_total_col] or "—") + "**")
             _ef1, _ef2, _ef3 = st.columns(3)
             with _ef1:
-                _e_save = st.form_submit_button("💾 Save", type="primary", use_container_width=True)
+                _e_save = st.button("💾 Save", type="primary", use_container_width=True, key="p3_edit_save_btn")
             with _ef2:
-                _e_cancel = st.form_submit_button("✖️ Cancel", use_container_width=True)
+                _e_cancel = st.button("✖️ Cancel", use_container_width=True, key="p3_edit_cancel_btn")
             with _ef3:
-                _e_delete = st.form_submit_button("🗑️ Delete करें", use_container_width=True)
+                _e_delete = st.button("🗑️ Delete करें", use_container_width=True, key="p3_edit_delete_btn")
             _ef4, _ef5 = st.columns(2)
             with _ef4:
-                _e_add_cls = st.form_submit_button("➕ Class + SERIAL जोड़ें", use_container_width=True)
+                _e_add_cls = st.button("➕ Class + SERIAL जोड़ें", use_container_width=True, key="p3_edit_addcls_btn")
             with _ef5:
-                _e_rm_cls = st.form_submit_button("➖ Class + SERIAL हटाएँ", use_container_width=True,
+                _e_rm_cls = st.button("➖ Class + SERIAL हटाएँ", use_container_width=True, key="p3_edit_rmcls_btn",
                                                     disabled=st.session_state[_ecls_key] <= 1)
 
         def _p3_edit_reset_cls_state():
             st.session_state.pop(_ecls_key, None)
             for _k in [k for k in list(st.session_state.keys())
                        if k.startswith(f"p3_edit_cls_{_eidx}_{_p3_subj_type}_") or k.startswith(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_")
-                       or k.startswith(f"p3_edit_br_{_eidx}_{_p3_subj_type}_") or k.startswith(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_")]:
+                       or k.startswith(f"p3_edit_br_{_eidx}_{_p3_subj_type}_") or k.startswith(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_")
+                       or k.startswith(f"p3_edit_orig_{_eidx}_{_p3_subj_type}_")]:
                 st.session_state.pop(_k, None)
 
         if _e_add_cls:
