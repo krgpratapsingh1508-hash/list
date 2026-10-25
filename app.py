@@ -714,8 +714,15 @@ def faculty_upload_ui(key_prefix):
         st.error("❌ फ़ाइल में कोई मान्य डेटा नहीं मिला।")
         return
 
+    # ✅ P3 के "Backup Export" (ya purane CSV) me app ke apne column naam hote hain — unhe jaisa hai waisa hi padho.
+    # Warna "Department" (= Allotted Class) aur "Tutor Department" dono ek hi column me badal jaate aur data bigad jaata.
+    _is_backup_format = {"Faculty Name", "Tutor Department", "Department"} <= set(map(str, fac_raw.columns))
+    if _is_backup_format:
+        st.success("✅ यह P3 का Backup Export फ़ाइल है — सभी Subject Types (Major/Minor/Vocational/MDC/PW-Ap-CE) का "
+                   "Allotted Class + SERIAL NO. जैसा था वैसा ही वापस आएगा।")
+
     fac_rename = {}
-    for col in fac_raw.columns:
+    for col in ([] if _is_backup_format else fac_raw.columns):
         key = re.sub(r"[^a-z0-9]", "", str(col).strip().lower())
         if key in ("allottedclass", "class", "allottedclassname"):
             fac_rename[col] = "Department"                 # Allotted Class
@@ -1164,8 +1171,18 @@ elif choice == "P3 — Guardian Tutors List":
         _dl = _fac.reset_index(drop=True).copy()
         _dl.insert(0, "S.N.", range(1, len(_dl) + 1))
         _dl["Mobile Number"] = _dl["Mobile Number"].map(lambda v: "" if str(v).strip("_ ").strip() == "" else v)
-        st.download_button("⬇️ CSV Download करें", _dl.to_csv(index=False).encode("utf-8-sig"),
-                           file_name="guardian_tutors_list.csv", mime="text/csv")
+        _dlc1, _dlc2 = st.columns(2)
+        with _dlc1:
+            st.download_button("⬇️ CSV Download करें (सिर्फ़ देखने/print के लिए)", _dl.to_csv(index=False).encode("utf-8-sig"),
+                               file_name="guardian_tutors_list.csv", mime="text/csv", use_container_width=True)
+        with _dlc2:
+            # Backup Export: app ke saare columns (sabhi Subject Types ka Class + SERIAL NO. samet), bina kisi badlaav ke.
+            # Isi file ko upar "📤 फ़ाइल से List अपलोड करें" me dobara upload karke List waisi hi wapas laayi ja sakti hai.
+            _bk = load_faculty().reset_index(drop=True)[FACULTY_COLUMNS]
+            st.download_button("💾 Backup Export (दोबारा Upload करने के लिए)", _bk.to_csv(index=False).encode("utf-8-sig"),
+                               file_name=f"guardian_tutors_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                               mime="text/csv", use_container_width=True, type="primary",
+                               help="इस फ़ाइल को बाद में P3 → '📤 फ़ाइल से List अपलोड करें' में डालने पर पूरी List (सभी Subject Types समेत) वापस आ जाएगी।")
 
     # ----------------------------------------------------------------
     # ➕ NAYA TUTOR JODEIN
