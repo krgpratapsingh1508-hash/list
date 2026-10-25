@@ -1929,7 +1929,8 @@ elif choice == "P5 — Print Panel":
             st.session_state.ph_color2 = st.color_picker("Line 2 Color", st.session_state.ph_color2)
     with ph_c2:
         st.session_state.ph_title3 = st.text_input("Header Line 3 — List Title", value=st.session_state.ph_title3)
-        st.caption("📘 Major Subject अब नीचे 'डेटा चुनें' सेक्शन के बाद चुना जाएगा — वहाँ इसी List के students के Subject से dropdown बनता है।")
+        st.caption("📘 Line 3 में ', Major Subject - …' अपने आप जुड़ता है — चुने गए Guardian Tutor की P3 वाली Branch से "
+                   "(Tutor न चुना हो तो List के Students की Branch से)।")
         s3a, s3b = st.columns(2)
         with s3a:
             st.session_state.ph_size3 = st.slider("Line 3 Font Size (px)", 8, 30, st.session_state.ph_size3)
@@ -2025,8 +2026,20 @@ elif choice == "P5 — Print Panel":
 
     st.caption(f"कुल {len(pp_view)} records मिले।")
 
-    # ---- Header Line 3: sirf wahi jo upar "Title 3" me likha ho ----
-    st.session_state.ph_line3 = st.session_state.ph_title3.strip()
+    # ---- Header Line 3: "<Title 3>, Major Subject - <Branch>" ----
+    # Branch: chune gaye Guardian Tutor ki P3 wali Branch(es); Tutor nahi chuna to is List ke Students ki Branch
+    if _p5_pick != _p5_blank_opt:
+        _ms_src = [b.strip() for b in str(_p5_opts[_p5_pick]["Branch"]).split("\n")]
+    else:
+        _ms_src = [str(b).strip() for b in pp_view["Branch"]] if "Branch" in pp_view.columns else []
+    _major_subj = ", ".join(dict.fromkeys(b for b in _ms_src if b))
+    _title3 = st.session_state.ph_title3.strip()
+    if _title3 and _major_subj:
+        st.session_state.ph_line3 = f"{_title3}, Major Subject - {_major_subj}"
+    elif _major_subj:
+        st.session_state.ph_line3 = f"Major Subject - {_major_subj}"
+    else:
+        st.session_state.ph_line3 = _title3
 
     st.markdown(
         f"""<div style="border:1px solid var(--pg-border); border-radius:10px; padding:14px 18px;
