@@ -702,6 +702,23 @@ def faculty_upload_ui(key_prefix):
                "कॉलम हों — जैसे 'LIST OF GUARDIANS TUTORS' शीट में होता है "
                "(S.N., Department, Name of Guardians Tutors, Mobile No., Allotted Class, Number of Student)। "
                "Designation, Mobile Number वैकल्पिक हैं। ⚠️ नई फ़ाइल पुरानी List को replace कर देगी।")
+    # Upload Format (Template): khaali format + 2 sample rows — isi columns ke hisaab se apna data bharke upload karein
+    _tpl = pd.DataFrame([
+        {"S.N.": "1", "Department": "Commerce", "Name of Guardians Tutors": "Dr. Sample Name",
+         "Mobile No.": "9876543210", "Allotted Class": "B.Com. I Year", "Serial No": "1-10", "Number of Student": "10"},
+        {"S.N.": "2", "Department": "Computer Science", "Name of Guardians Tutors": "Dr. Sample Two",
+         "Mobile No.": "9123456780", "Allotted Class": "PGDCA I Year\nPGDCA II Year", "Serial No": "11-20\n1-5",
+         "Number of Student": "15"},
+    ])
+    st.download_button(
+        "📥 Upload Format (Template) Download करें", _tpl.to_csv(index=False).encode("utf-8-sig"),
+        file_name="guardian_tutors_upload_format.csv", mime="text/csv", key=f"{key_prefix}_fac_tpl_dl",
+        help="इस फ़ाइल में दिए columns वैसे ही रखें, Sample rows हटाकर अपना data भरें, फिर नीचे Upload करें। "
+             "एक Tutor की एक से ज़्यादा Class हों तो Allotted Class और Serial No में हर Class नई लाइन (Excel में Alt+Enter) पर लिखें।")
+    st.caption("ℹ️ Template में 2 Sample rows हैं (दूसरी row में एक Tutor की 2 Class दिखाई गई हैं) — इन्हें हटाकर अपना data भरें। "
+               "Department = Tutor का Department, Allotted Class = Major Subject की Class। "
+               "Minor/Vocational/MDC/PW-Ap-CE का data इस Template में नहीं आता — वह P3 में Subject Type चुनकर भरें, "
+               "और पूरी List का Backup/Restore '💾 Backup Export' से करें।")
     fac_file = st.file_uploader("Guardian Tutors List फ़ाइल चुनें", type=["csv", "xlsx", "xls"], key=f"{key_prefix}_fac_upload")
     if fac_file is None:
         return
@@ -736,6 +753,8 @@ def faculty_upload_ui(key_prefix):
             fac_rename[col] = "Designation"
         elif key in ("mobilenumber", "mobileno", "mobile", "phone", "phonenumber", "contactno", "mobno"):
             fac_rename[col] = "Mobile Number"
+        elif key in ("serialno", "serialnumber", "srno", "serial", "serialnos"):
+            fac_rename[col] = "Serial No"
         elif key in ("numberofstudent", "numberofstudents", "totalstudents", "studentcount", "noofstudents",
                      "nostudents", "noofstudent"):
             fac_rename[col] = "Number of Students"
