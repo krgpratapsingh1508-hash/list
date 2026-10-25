@@ -1365,29 +1365,33 @@ elif choice == "P3 — Guardian Tutors List":
                             taken[_n] = str(_tr["Faculty Name"]).strip() or "(बिना नाम)"
         return taken
 
-    def _p3_serial_choices(deg, br, yr, exclude_idx, frm):
+    def _p3_serial_choices(deg, br, yr, exclude_idx, frm, extra=()):
         """FROM / TO dropdown ke options: sirf wahi Serial jo is Class me khaali hain (type karke bhi dhoondh sakte hain).
         TO me FROM se aage ke wahi Serial aate hain jo FROM se lagatar khaali hon (beech me kisi aur Tutor ka Serial na aaye)."""
         if not (deg and br and yr):
             return [""], [""]
         _n = len(_p3_class_students(deg, br, yr))
         _tk = _p3_taken(_p3_class_key(f"{deg} {yr}", br), exclude_idx)
+        for _x in extra:                       # isi form ki pichhli lines me jo Serial is Class ke liye diye ja chuke
+            _tk.setdefault(_x, "इसी Tutor की पिछली लाइन")
         _free = [n for n in range(1, _n + 1) if n not in _tk]
         _to = []
         if str(frm).strip().isdigit():
             _f = int(str(frm).strip())
-            _n2 = _f
+            _n2 = _f + 1                       # TO me FROM ke BAAD ke Serial (sirf ek Serial ho to TO khaali chhodein)
             while _n2 <= _n and _n2 not in _tk:
                 _to.append(_n2)
                 _n2 += 1
         return [""] + [str(n) for n in _free], [""] + [str(n) for n in _to]
 
-    def _p3_serial_panel(deg, br, yr, exclude_idx, uid):
+    def _p3_serial_panel(deg, br, yr, exclude_idx, uid, extra=()):
         if not (deg and br and yr):
             st.caption("ℹ️ Degree, Branch aur Year तीनों चुनने पर यहाँ उस Class के Serial No. की जानकारी दिखेगी।")
             return
         _stu = _p3_class_students(deg, br, yr)
         _tk = _p3_taken(_p3_class_key(f"{deg} {yr}", br), exclude_idx)
+        for _x in extra:
+            _tk.setdefault(_x, "इसी Tutor की पिछली लाइन")
         _free = [n for n in range(1, len(_stu) + 1) if n not in _tk]
         _msg = (f"📋 इस Class में कुल **{len(_stu)}** Students (नाम के A–Z क्रम में Serial 1–{len(_stu)}) · "
                 f"✅ खाली Serial: **{_p3_compress(_free) or 'कोई नहीं'}**")
@@ -1450,6 +1454,7 @@ elif choice == "P3 — Guardian Tutors List":
             st.markdown(f"**Degree + Year + Branch + SERIAL NO. ({_p3_subj_type})** — हर Class के साथ उसका SERIAL NO. भी साथ में लिखें; "
                         "एक से ज़्यादा Class हों तो नीचे ➕ से और जोड़ी जोड़ें (जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा)")
             _n_cls_vals, _n_srl_vals, _n_br_vals = [], [], []
+            _n_used = {}      # {Class key: us Class ke wo Serial jo isi form ki pichhli lines me de diye}
             for _ci in range(st.session_state["p3_add_cls_n"]):
                 _cc1, _cc3, _cc1y, _cc2, _cc2b = st.columns(5)
                 with _cc1:
@@ -1468,17 +1473,21 @@ elif choice == "P3 — Guardian Tutors List":
                                          help="चुने गए Degree + Branch का ही Year दिखेगा" if _ci == 0 else None)
                 _n_cls_vals.append(f"{_n_deg.strip()} {_n_yr}".strip())
                 with _cc2:
-                    _of, _ = _p3_serial_choices(_n_deg, _n_br, _n_yr, None, "")
+                    _ck = _p3_class_key(f"{_n_deg} {_n_yr}", _n_br)
+                    _of, _ = _p3_serial_choices(_n_deg, _n_br, _n_yr, None, "", _n_used.get(_ck, ()))
                     _p3_guard(f"p3_add_srl_{_ci}", _of)
                     _n_sf = st.selectbox(f"FROM SERIAL NO. {_ci + 1}", _of, key=f"p3_add_srl_{_ci}",
                                          help="सिर्फ़ खाली Serial दिखते हैं — scroll करें या number type करें" if _ci == 0 else None)
                 with _cc2b:
-                    _, _ot = _p3_serial_choices(_n_deg, _n_br, _n_yr, None, _n_sf)
+                    _, _ot = _p3_serial_choices(_n_deg, _n_br, _n_yr, None, _n_sf, _n_used.get(_ck, ()))
                     _p3_guard(f"p3_add_srl_to_{_ci}", _ot)
                     _n_st = st.selectbox(f"TO SERIAL NO. {_ci + 1}", _ot, key=f"p3_add_srl_to_{_ci}",
                                          help="FROM से लगातार खाली Serial ही दिखते हैं" if _ci == 0 else None)
                 _n_srl_vals.append(_p3_compose_serial(_n_sf, _n_st))
-                _p3_serial_panel(_n_deg, _n_br, _n_yr, None, f"add_{_ci}")
+                _p3_serial_panel(_n_deg, _n_br, _n_yr, None, f"add_{_ci}", _n_used.get(_ck, ()))
+                if all(_ck):
+                    for _ra, _rb in _p3_parse_ranges(_n_srl_vals[-1])[0]:
+                        _n_used.setdefault(_ck, set()).update(range(_ra, _rb + 1))
             _fb1, _fb2, _fb3 = st.columns(3)
             with _fb1:
                 _n_save = st.button("💾 जोड़ें", type="primary", use_container_width=True, key="p3_add_save_btn")
@@ -1556,7 +1565,7 @@ elif choice == "P3 — Guardian Tutors List":
                 if _bad or not _rg:
                     _pieces = [(_sr.strip(), "")]
                 else:
-                    _pieces = [(str(x), str(y)) for x, y in _rg]
+                    _pieces = [(str(x), "" if x == y else str(y)) for x, y in _rg]
                 for _pf, _pt in _pieces:
                     _existing_cls.append(_c); _existing_br.append(_b)
                     _existing_from.append(_pf); _existing_to.append(_pt)
@@ -1580,6 +1589,7 @@ elif choice == "P3 — Guardian Tutors List":
             st.markdown(f"**Allotted Class ({_p3_subj_type}) + SERIAL NO.** — हर Class के साथ उसका SERIAL NO. भी साथ में लिखें; "
                         "जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा")
             _e_cls_vals, _e_srl_vals, _e_br_vals = [], [], []
+            _e_used = {}
             for _ci in range(st.session_state[_ecls_key]):
                 _ecc1, _ecc3, _ecc1y, _ecc2, _ecc2b = st.columns(5)
                 _orig = st.session_state.get(f"p3_edit_orig_{_eidx}_{_p3_subj_type}_{_ci}", ("", "", ""))
@@ -1597,7 +1607,8 @@ elif choice == "P3 — Guardian Tutors List":
                     _e_yr = st.selectbox(f"Year {_ci + 1}", _o, key=f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_ci}")
                 _e_cls_vals.append(f"{_e_deg.strip()} {_e_yr}".strip())
                 with _ecc2:
-                    _of, _ = _p3_serial_choices(_e_deg, _e_br, _e_yr, _eidx, "")
+                    _ck = _p3_class_key(f"{_e_deg} {_e_yr}", _e_br)
+                    _of, _ = _p3_serial_choices(_e_deg, _e_br, _e_yr, _eidx, "", _e_used.get(_ck, ()))
                     _same_cls = (_e_deg, _e_br, _e_yr) == tuple(_orig)
                     _cur_f = st.session_state.get(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}", "")
                     if _same_cls and _cur_f and _cur_f not in _of:
@@ -1605,14 +1616,17 @@ elif choice == "P3 — Guardian Tutors List":
                     _p3_guard(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}", _of)
                     _e_sf = st.selectbox(f"FROM SERIAL NO. {_ci + 1}", _of, key=f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}")
                 with _ecc2b:
-                    _, _ot = _p3_serial_choices(_e_deg, _e_br, _e_yr, _eidx, _e_sf)
+                    _, _ot = _p3_serial_choices(_e_deg, _e_br, _e_yr, _eidx, _e_sf, _e_used.get(_ck, ()))
                     _cur_t = st.session_state.get(f"p3_edit_srl_to_{_eidx}_{_p3_subj_type}_{_ci}", "")
                     if _same_cls and _cur_t and _cur_t not in _ot:
                         _ot = _ot + [_cur_t]
                     _p3_guard(f"p3_edit_srl_to_{_eidx}_{_p3_subj_type}_{_ci}", _ot)
                     _e_st = st.selectbox(f"TO SERIAL NO. {_ci + 1}", _ot, key=f"p3_edit_srl_to_{_eidx}_{_p3_subj_type}_{_ci}")
                 _e_srl_vals.append(_p3_compose_serial(_e_sf, _e_st))
-                _p3_serial_panel(_e_deg, _e_br, _e_yr, _eidx, f"edit_{_eidx}_{_ci}")
+                _p3_serial_panel(_e_deg, _e_br, _e_yr, _eidx, f"edit_{_eidx}_{_ci}", _e_used.get(_ck, ()))
+                if all(_ck):
+                    for _ra, _rb in _p3_parse_ranges(_e_srl_vals[-1])[0]:
+                        _e_used.setdefault(_ck, set()).update(range(_ra, _rb + 1))
             st.caption("ℹ️ TOTAL NUMBER OF STUDENTS Save karne par SERIAL NO. se apne aap calculate ho jayega — "
                        "abhi ke hisaab se: **" + (_p3_total_from_serial(_erow[_p3_serial_col]) or _erow[_p3_total_col] or "—") + "**")
             _ef1, _ef2, _ef3 = st.columns(3)
