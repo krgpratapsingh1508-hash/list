@@ -271,6 +271,39 @@ def _p3_total_from_serial(serial_str):
     return str(total) if found else ""
 
 
+def _p3_parse_ranges(serial_str):
+    """'1-10, 15' jaisi Serial text ko [(1,10),(15,15)] me badalta hai. Galat part mile to bad=True."""
+    out, bad = [], False
+    for part in re.split(r"[,\n]", str(serial_str)):
+        part = part.strip()
+        if not part:
+            continue
+        m = re.fullmatch(r"(\d+)\s*-\s*(\d+)", part)
+        if m and int(m.group(1)) >= 1 and int(m.group(2)) >= int(m.group(1)):
+            out.append((int(m.group(1)), int(m.group(2))))
+        elif part.isdigit() and int(part) >= 1:
+            out.append((int(part), int(part)))
+        else:
+            bad = True
+    return out, bad
+
+
+def _p3_compress(nums):
+    """[1,2,3,7,8] -> '1-3, 7-8'"""
+    nums = sorted(set(nums))
+    if not nums:
+        return ""
+    parts, a, b = [], nums[0], nums[0]
+    for n in nums[1:]:
+        if n == b + 1:
+            b = n
+        else:
+            parts.append(f"{a}-{b}" if a != b else str(a))
+            a = b = n
+    parts.append(f"{a}-{b}" if a != b else str(a))
+    return ", ".join(parts)
+
+
 def load_faculty():
     if os.path.exists(FACULTY_FILE):
         try:
@@ -1289,6 +1322,95 @@ elif choice == "P3 — Guardian Tutors List":
         if st.session_state.get(key, "") not in opts:
             st.session_state[key] = ""
 
+    # ---- Serial No.: chune hue (Degree + Branch + Year) ke Students ko Name se A-Z karke 1..N Serial milta hai;
+    # ek baar jo Serial kisi Tutor ko diya gaya wo usi Class me kisi aur Tutor ko nahi mil sakta ----
+    def _p3_class_key(cls_text, br):
+        _dg, _yr = parse_allotted_class(cls_text)
+        return (_dg.strip().lower(), str(br).strip().lower(), _yr)
+
+    def _p3_class_students(deg, br, yr):
+        # Degree ka naam save hote waqt thoda badal sakta hai (B.Com -> B.Com.), isliye symbols/case ignore karke match karte hain
+        _nk = lambda v: re.sub(r"[^a-z0-9]", "", str(v).lower())
+        sub = _p3_match(db, "Branch", br)
+        if "Degree" in sub.columns:
+            sub = sub[sub["Degree"].map(_nk) == _nk(deg)]
+        if "Current Year" in sub.columns:
+            sub = sub[sub["Current Year"].astype(str).map(normalize_course_year).str.strip() == yr]
+        sub = sub.assign(_k=sub["Student Name"].astype(str).str.strip().str.lower()).sort_values("_k", kind="stable")
+        return sub.reset_index(drop=True)
+
+    def _p3_taken(key, exclude_idx):
+        """Isi Class (key) ke wo Serial jo dusre Tutors ko mil chuke: {serial_no: tutor_name}"""
+        taken = {}
+        for _ti, _tr in _fac.iterrows():
+            if _ti == exclude_idx:
+                continue
+            _cl = str(_tr[_p3_class_col]).split("\n")
+            _bl = str(_tr[_p3_branch_col]).split("\n")
+            _sl = str(_tr[_p3_serial_col]).split("\n")
+            for _li, _c in enumerate(_cl):
+                if not _c.strip() or _li >= len(_sl):
+                    continue
+                if _p3_class_key(_c, _bl[_li] if _li < len(_bl) else "") == key:
+                    for _a, _b in _p3_parse_ranges(_sl[_li])[0]:
+                        for _n in range(_a, _b + 1):
+                            taken[_n] = str(_tr["Faculty Name"]).strip() or "(बिना नाम)"
+        return taken
+
+    def _p3_serial_panel(deg, br, yr, exclude_idx, uid):
+        if not (deg and br and yr):
+            st.caption("ℹ️ Degree, Branch aur Year तीनों चुनने पर यहाँ उस Class के Serial No. की जानकारी दिखेगी।")
+            return
+        _stu = _p3_class_students(deg, br, yr)
+        _tk = _p3_taken(_p3_class_key(f"{deg} {yr}", br), exclude_idx)
+        _free = [n for n in range(1, len(_stu) + 1) if n not in _tk]
+        _msg = (f"📋 इस Class में कुल **{len(_stu)}** Students (नाम के A–Z क्रम में Serial 1–{len(_stu)}) · "
+                f"✅ खाली Serial: **{_p3_compress(_free) or 'कोई नहीं'}**")
+        if _tk:
+            _by = {}
+            for _n, _t in _tk.items():
+                _by.setdefault(_t, []).append(_n)
+            _msg += " · 🔒 पहले से दिए गए: " + "; ".join(f"{_p3_compress(v)} → {k}" for k, v in _by.items())
+        st.caption(_msg)
+        if len(_stu) and st.checkbox("👁️ इस Class के Students (Serial के साथ) दिखाएँ", key=f"p3_show_stu_{uid}"):
+            _tbl = pd.DataFrame({
+                "Serial No.": range(1, len(_stu) + 1),
+                "Student Name": _stu["Student Name"].astype(str).str.strip(),
+                "Father Name": _stu["Father Name"].astype(str).str.strip() if "Father Name" in _stu.columns else "",
+                "Tutor": [_tk.get(n, "—") for n in range(1, len(_stu) + 1)],
+            })
+            st.dataframe(_tbl, hide_index=True, use_container_width=True)
+
+    def _p3_validate(rows, exclude_idx):
+        """rows = [(class_text, branch, serial_text)] — galtiyon ki list lautata hai (khaali = sab theek)"""
+        errs, own = [], {}
+        for _c, _b, _srl in rows:
+            if not str(_srl).strip():
+                continue
+            _ranges, _bad = _p3_parse_ranges(_srl)
+            if _bad:
+                errs.append(f"'{_srl}' सही Serial No. नहीं है — ऐसे लिखें: 1-10 (या 1-10, 15-20)।")
+                continue
+            _key = _p3_class_key(_c, _b)
+            if not all(_key):
+                continue
+            _deg_raw, _yr_raw = parse_allotted_class(_c)
+            _n_stu = len(_p3_class_students(_deg_raw, _b, _yr_raw))
+            _tk = _p3_taken(_key, exclude_idx)
+            _used = own.setdefault(_key, set())
+            for _a, _z in _ranges:
+                if _n_stu and _z > _n_stu:
+                    errs.append(f"{_c} / {_b}: Serial {_a}-{_z} इस Class के कुल {_n_stu} Students से बाहर है।")
+                for _n in range(_a, _z + 1):
+                    if _n in _tk:
+                        errs.append(f"{_c} / {_b}: Serial {_n} पहले से '{_tk[_n]}' को दिया जा चुका है।")
+                        break
+                    if _n in _used:
+                        errs.append(f"{_c} / {_b}: Serial {_n} इसी Tutor की दूसरी लाइन में भी आ गया है।")
+                        break
+                _used.update(range(_a, _z + 1))
+        return errs
+
     # ----------------------------------------------------------------
     # ➕ NAYA TUTOR JODEIN
     # ----------------------------------------------------------------
@@ -1322,7 +1444,8 @@ elif choice == "P3 — Guardian Tutors List":
                 _n_cls_vals.append(f"{_n_deg.strip()} {_n_yr}".strip())
                 with _cc2:
                     _n_srl_vals.append(st.text_input(f"SERIAL NO. {_ci + 1}", key=f"p3_add_srl_{_ci}",
-                                                      help="जैसे '1-10'" if _ci == 0 else ""))
+                                                      help="जैसे '1-10' — यहाँ से यहाँ तक" if _ci == 0 else ""))
+                _p3_serial_panel(_n_deg, _n_br, _n_yr, None, f"add_{_ci}")
             _fb1, _fb2, _fb3 = st.columns(3)
             with _fb1:
                 _n_save = st.button("💾 जोड़ें", type="primary", use_container_width=True, key="p3_add_save_btn")
@@ -1343,8 +1466,12 @@ elif choice == "P3 — Guardian Tutors List":
             st.session_state["p3_add_cls_n"] -= 1
             st.rerun()
         if _n_save:
+            _n_errs = _p3_validate(list(zip(_n_cls_vals, _n_br_vals, _n_srl_vals)), None)
             if not _n_name.strip() and not _n_tdept.strip():
                 st.warning("⚠️ कम से कम NAME या DEPARTMENT भरें।")
+            elif _n_errs:
+                for _m in _n_errs:
+                    st.error("❌ " + _m)
             else:
                 _n_pairs = [(c.strip(), s.strip(), b.strip()) for c, s, b in zip(_n_cls_vals, _n_srl_vals, _n_br_vals)
                             if c.strip() or s.strip() or b.strip()]
@@ -1424,6 +1551,7 @@ elif choice == "P3 — Guardian Tutors List":
                     _default_s = st.session_state.get(f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}", "")
                     _e_srl_vals.append(st.text_input(f"SERIAL NO. {_ci + 1}", value=_default_s,
                                                       key=f"p3_edit_srl_{_eidx}_{_p3_subj_type}_{_ci}"))
+                _p3_serial_panel(_e_deg, _e_br, _e_yr, _eidx, f"edit_{_eidx}_{_ci}")
             st.caption("ℹ️ TOTAL NUMBER OF STUDENTS Save karne par SERIAL NO. se apne aap calculate ho jayega — "
                        "abhi ke hisaab se: **" + (_p3_total_from_serial(_erow[_p3_serial_col]) or _erow[_p3_total_col] or "—") + "**")
             _ef1, _ef2, _ef3 = st.columns(3)
@@ -1459,6 +1587,11 @@ elif choice == "P3 — Guardian Tutors List":
             st.session_state.pop(f"p3_edit_yr_{_eidx}_{_p3_subj_type}_{_e_last}", None)
             st.session_state[_ecls_key] -= 1
             st.rerun()
+        _e_errs = _p3_validate(list(zip(_e_cls_vals, _e_br_vals, _e_srl_vals)), _eidx) if _e_save else []
+        if _e_save and _e_errs:
+            for _m in _e_errs:
+                st.error("❌ " + _m)
+            _e_save = False
         if _e_save:
             _e_pairs = [(c.strip(), s.strip(), b.strip()) for c, s, b in zip(_e_cls_vals, _e_srl_vals, _e_br_vals)
                         if c.strip() or s.strip() or b.strip()]
