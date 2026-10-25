@@ -1296,8 +1296,10 @@ elif choice == "P3 — Guardian Tutors List":
 
     # Degree -> Branch -> Year: teeno dropdown P2 ki List (database) se aate hain aur ek doosre par depend karte hain —
     # Degree chunne par sirf usi Degree ki Branch, Branch chunne par sirf usi (Degree + Branch) ka Year dikhta hai.
+    P3_ALL_BRANCH = "ALL"      # Branch dropdown ka "ALL" option: us Degree + Year ki saari Branch ke Students
+
     def _p3_match(df, col, val):
-        if not val or col not in df.columns:
+        if not val or col not in df.columns or (col == "Branch" and val == P3_ALL_BRANCH):
             return df
         return df[df[col].astype(str).str.strip() == val]
 
@@ -1313,7 +1315,8 @@ elif choice == "P3 — Guardian Tutors List":
     _p3_deg_base = _p3_uniq(db, "Degree")
 
     def _p3_branch_base(deg):
-        return _p3_uniq(_p3_match(db, "Degree", deg), "Branch")
+        _b = _p3_uniq(_p3_match(db, "Degree", deg), "Branch")
+        return ([P3_ALL_BRANCH] + _b) if _b else _b
 
     def _p3_year_base(deg, br):
         sub = _p3_match(_p3_match(db, "Degree", deg), "Branch", br)
