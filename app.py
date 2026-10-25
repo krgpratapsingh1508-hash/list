@@ -1144,6 +1144,20 @@ elif choice == "P3 — Guardian Tutors List":
     # (Actions me ✏️ Edit aur 📌 Assign button — Streamlit ki grid me
     #  seedhe button nahi daal sakte, isliye table row-by-row banti hai)
     # ----------------------------------------------------------------
+    # ---- 📊 P2 ki List se TOTAL aur YEAR-WISE TOTAL (table ke upar) ----
+    _p3_yr_series = (db["Current Year"].astype(str).map(normalize_course_year).str.strip()
+                     if "Current Year" in db.columns else pd.Series([], dtype=str))
+    _p3_yr_counts = _p3_yr_series[_p3_yr_series != ""].value_counts()
+    _p3_yr_order = ([y for y in COURSE_YEAR_OPTIONS if y in _p3_yr_counts.index]
+                    + [y for y in _p3_yr_counts.index if y not in COURSE_YEAR_OPTIONS])
+    _p3_yr_blank = int((_p3_yr_series == "").sum())
+    _sm_cols = st.columns(1 + len(_p3_yr_order) + (1 if _p3_yr_blank else 0))
+    _sm_cols[0].metric("👥 कुल Students (P2 List)", len(db))
+    for _i, _y in enumerate(_p3_yr_order, start=1):
+        _sm_cols[_i].metric(_y, int(_p3_yr_counts[_y]))
+    if _p3_yr_blank:
+        _sm_cols[-1].metric("Year खाली", _p3_yr_blank)
+
     if _fac.empty:
         st.info("📭 अभी List खाली है — ऊपर से फ़ाइल अपलोड करें, या नीचे ➕ से नया Tutor जोड़ें।")
     else:
