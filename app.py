@@ -2759,37 +2759,92 @@ elif choice == "P6 — Admin Panel":
             _p6d_flash = st.session_state.pop("p6_data_flash", None)
             if _p6d_flash:
                 st.success(_p6d_flash)
-            st.caption("नीचे टेबल में किसी भी row के शुरू में checkbox से एक या कई rows select करें, "
-                       "फिर नीचे '🗑️ Selected Rows Delete करें' बटन से उन्हें हमेशा के लिए हटाएँ।")
+            _P6_MODE_VIEW, _P6_MODE_EDIT = "👁️ देखें / Rows चुनकर Delete करें", "✏️ Edit Mode (Data बदलें / जोड़ें / हटाएँ)"
+            _p6d_mode = st.radio("Database में क्या करना है?", [_P6_MODE_VIEW, _P6_MODE_EDIT], key="p6_data_mode", horizontal=True)
             _p6d_search = st.text_input("🔎 Database में खोजें (select करने से पहले छाँटने के लिए)", key="p6_data_search")
             _p6d_view = db.copy()
             if _p6d_search.strip():
                 _s = _p6d_search.strip().lower()
                 _p6d_view = _p6d_view[_p6d_view.apply(lambda r: _s in " ".join(str(v).lower() for v in r.values), axis=1)]
             st.caption(f"{len(_p6d_view)} rows दिख रही हैं।")
-            _p6d_key = f"p6_data_select_{st.session_state.get('p6_data_select_n', 0)}"
-            _p6d_event = st.dataframe(
-                _p6d_view,
-                use_container_width=True,
-                hide_index=True,
-                on_select="rerun",
-                selection_mode="multi-row",
-                key=_p6d_key,
-            )
-            _p6d_sel_positions = list(_p6d_event.selection.rows) if _p6d_event and getattr(_p6d_event, "selection", None) else []
-            if _p6d_sel_positions:
-                _p6d_sel_orig_idx = _p6d_view.iloc[_p6d_sel_positions].index.tolist()
-                st.warning(f"⚠️ {len(_p6d_sel_positions)} row(s) select की गई हैं — Delete करने से पहले ध्यान से देख लें, यह Database से हमेशा के लिए हट जाएँगी।")
-                with st.expander("👁️ Select की गई rows देखें"):
-                    st.dataframe(_p6d_view.loc[_p6d_sel_orig_idx], use_container_width=True, hide_index=True)
-                if st.button(f"🗑️ Selected {len(_p6d_sel_positions)} Row(s) Delete करें", type="secondary", key="p6_data_delete_btn"):
-                    db = db.drop(index=_p6d_sel_orig_idx).reset_index(drop=True)
-                    save_db(db)
-                    st.session_state["p6_data_flash"] = f"🗑️ {len(_p6d_sel_orig_idx)} row(s) Database से हटा दी गई हैं। अब कुल {len(db)} records हैं।"
+            if _p6d_mode == _P6_MODE_EDIT:
+                st.caption("✏️ किसी भी cell पर double-click करके बदलें। **नई row** जोड़ने के लिए टेबल के सबसे नीचे ➕ दबाएँ; "
+                           "**row हटाने** के लिए उसके बाएँ checkbox से select करके कीबोर्ड का Delete दबाएँ (या 🗑️ icon)। "
+                           "बदलाव तब तक Database में नहीं जाते जब तक आप नीचे **💾 Changes Save करें** न दबाएँ।")
+                _ed_src = _p6d_view.reset_index(drop=True)        # position 0..n-1 ↔ asli Database index (_ed_map)
+                _ed_map = list(_p6d_view.index)
+                _ed_n = len(_ed_src)
+                _status_opts = list(dict.fromkeys([""] + ["Approved", "Pending"] + [v for v in db["Status"].astype(str) if v]))
+                _dept_opts_ed = list(dict.fromkeys([""] + list(st.session_state.departments)
+                                                    + [v for v in db["Assigned Department"].astype(str) if v]))
+                _ed_cfg = {
+                    "Status": st.column_config.SelectboxColumn("Status", options=_status_opts),
+                    "Assigned Department": st.column_config.SelectboxColumn("Assigned Department", options=_dept_opts_ed),
+                }
+                _ed_key = f"p6_data_editor_{st.session_state.get('p6_data_select_n', 0)}_{abs(hash(_p6d_search.strip()))}"
+                _edited = st.data_editor(_ed_src, use_container_width=True, num_rows="dynamic", height=520,
+                                         column_config=_ed_cfg, key=_ed_key)
+                _kept = [i for i in _edited.index if i < _ed_n]
+                _removed = [i for i in range(_ed_n) if i not in set(_edited.index)]
+                _added_idx = [i for i in _edited.index if i >= _ed_n]
+                _a = _edited.loc[_kept].fillna("").astype(str) if _kept else _edited.iloc[0:0]
+                _b = _ed_src.loc[_kept].astype(str) if _kept else _ed_src.iloc[0:0]
+                _changed = [i for i in _kept if (_a.loc[i, ALL_COLUMNS] != _b.loc[i, ALL_COLUMNS]).any()] if _kept else []
+                _added_rows = _edited.loc[_added_idx].fillna("").astype(str) if _added_idx else _edited.iloc[0:0]
+                _added_rows = _added_rows[_added_rows.apply(lambda r: any(str(v).strip() for v in r.values), axis=1)]
+                _m1, _m2, _m3 = st.columns(3)
+                _m1.metric("✏️ बदली हुई rows", len(_changed))
+                _m2.metric("➕ नई rows", len(_added_rows))
+                _m3.metric("🗑️ हटाई गई rows", len(_removed))
+                if _removed:
+                    st.warning(f"⚠️ {len(_removed)} row(s) हटाने के लिए चिह्नित हैं — Save करने पर Database से हमेशा के लिए हट जाएँगी "
+                               "(Save से पहले पुराने Database की एक Backup copy अपने आप बन जाती है)।")
+                if st.button("💾 Changes Save करें", type="primary", key="p6_data_save_btn",
+                             disabled=not (_changed or len(_added_rows) or _removed)):
+                    import shutil
+                    try:
+                        shutil.copyfile(DB_FILE, DB_FILE + ".bak")
+                    except Exception:
+                        pass
+                    _nd = db.copy()
+                    for _i in _changed:
+                        _nd.loc[_ed_map[_i], ALL_COLUMNS] = _a.loc[_i, ALL_COLUMNS].values
+                    _nd = _nd.drop(index=[_ed_map[_i] for _i in _removed])
+                    if len(_added_rows):
+                        _new = _added_rows.reindex(columns=ALL_COLUMNS).fillna("")
+                        if "Status" in _new.columns:
+                            _new.loc[_new["Status"].str.strip() == "", "Status"] = "Approved"
+                        _nd = pd.concat([_nd, _new], ignore_index=True)
+                    _nd = _nd.reset_index(drop=True)
+                    save_db(_nd)
+                    st.session_state["p6_data_flash"] = (f"✅ Database Save हो गया — ✏️ {len(_changed)} बदली, ➕ {len(_added_rows)} नई, "
+                                                         f"🗑️ {len(_removed)} हटाई। अब कुल {len(_nd)} records हैं।")
                     st.session_state["p6_data_select_n"] = st.session_state.get("p6_data_select_n", 0) + 1
                     st.rerun()
             else:
-                st.caption("अभी कोई row select नहीं की गई है।")
+                _p6d_key = f"p6_data_select_{st.session_state.get('p6_data_select_n', 0)}"
+                _p6d_event = st.dataframe(
+                    _p6d_view,
+                    use_container_width=True,
+                    hide_index=True,
+                    on_select="rerun",
+                    selection_mode="multi-row",
+                    key=_p6d_key,
+                )
+                _p6d_sel_positions = list(_p6d_event.selection.rows) if _p6d_event and getattr(_p6d_event, "selection", None) else []
+                if _p6d_sel_positions:
+                    _p6d_sel_orig_idx = _p6d_view.iloc[_p6d_sel_positions].index.tolist()
+                    st.warning(f"⚠️ {len(_p6d_sel_positions)} row(s) select की गई हैं — Delete करने से पहले ध्यान से देख लें, यह Database से हमेशा के लिए हट जाएँगी।")
+                    with st.expander("👁️ Select की गई rows देखें"):
+                        st.dataframe(_p6d_view.loc[_p6d_sel_orig_idx], use_container_width=True, hide_index=True)
+                    if st.button(f"🗑️ Selected {len(_p6d_sel_positions)} Row(s) Delete करें", type="secondary", key="p6_data_delete_btn"):
+                        db = db.drop(index=_p6d_sel_orig_idx).reset_index(drop=True)
+                        save_db(db)
+                        st.session_state["p6_data_flash"] = f"🗑️ {len(_p6d_sel_orig_idx)} row(s) Database से हटा दी गई हैं। अब कुल {len(db)} records हैं।"
+                        st.session_state["p6_data_select_n"] = st.session_state.get("p6_data_select_n", 0) + 1
+                        st.rerun()
+                else:
+                    st.caption("अभी कोई row select नहीं की गई है।")
         st.download_button("⬇️ पूरा Database Backup (CSV) Download करें",
                             db.to_csv(index=False).encode("utf-8-sig"),
                             file_name="full_database_backup.csv", mime="text/csv")
