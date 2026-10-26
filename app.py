@@ -2407,12 +2407,15 @@ elif choice == "P5 — Print Panel":
     # Roll No. khaali ho to Unique ID, wo bhi khaali ho to Admission Application Number (sirf Print/Preview ke liye;
     # database me asli data nahi badalta)
     _roll_label = "Roll No."      # Column ka naam bhi usi hisaab se badalta hai ki data kahan se aaya
+    # "khaali" me ye bhi gine jaate hain: nan / none / null / - / 0 / NA
+    _BLANKS = {"", "nan", "none", "null", "-", "--", "0", "na", "n/a"}
+    _clean = lambda ser: ser.astype(str).str.strip().where(~ser.astype(str).str.strip().str.lower().isin(_BLANKS), "")
     if "Roll No." in pp_view.columns:
-        _roll = pp_view["Roll No."].astype(str).str.strip()
+        _roll = _clean(pp_view["Roll No."])
         _roll_used = ["Roll No."] if (_roll != "").any() else []
         for _fb, _fb_lbl in (("Unique ID", "Unique Id"), ("Admission Application Number", "Admission Application Number")):
             if _fb in pp_view.columns:
-                _fbv = pp_view[_fb].astype(str).str.strip()
+                _fbv = _clean(pp_view[_fb])
                 if ((_roll == "") & (_fbv != "")).any():
                     _roll_used.append(_fb_lbl)
                 _roll = _roll.where(_roll != "", _fbv)
@@ -2467,6 +2470,13 @@ elif choice == "P5 — Print Panel":
         # Branch ALL wali List ho to aakhri column me "Major Subject" (Student ki Branch) apne aap judta hai;
         # kisi khaas Branch wali List me ye tab tak nahi aata jab tak aap Columns me haath se na jodein
         _p5_all_branch = any(d["b"].strip().upper() == "ALL" for d in st.session_state.get("ph_sel_defs", []))
+        # Pehle se chune hue Columns me "Unique ID" ho aur "Roll No." na ho to ek baar "Roll No." se badal do
+        # (Roll No. column me hi ab Unique ID / Admission Application Number ka fallback lagta hai)
+        if "pp_cols" in st.session_state and not st.session_state.get("pp_roll_migrated"):
+            _old_cols = list(st.session_state["pp_cols"])
+            if "Unique ID" in _old_cols and "Roll No." not in _old_cols:
+                st.session_state["pp_cols"] = ["Roll No." if c == "Unique ID" else c for c in _old_cols]
+            st.session_state["pp_roll_migrated"] = True
         if "pp_cols" not in st.session_state:
             st.session_state["pp_cols"] = default_print_cols + (["Branch"] if _p5_all_branch and "Branch" in ALL_COLUMNS else [])
         else:
