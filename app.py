@@ -1011,8 +1011,7 @@ def faculty_upload_ui(key_prefix):
              "एक Tutor की एक से ज़्यादा Class हों तो Allotted Class और Serial No में हर Class नई लाइन (Excel में Alt+Enter) पर लिखें।")
     st.caption("ℹ️ Template में 2 Sample rows हैं (दूसरी row में एक Tutor की 2 Class दिखाई गई हैं) — इन्हें हटाकर अपना data भरें। "
                "Department = Tutor का Department; Degree + Year मिलकर Major Subject की Allotted Class बनते हैं। "
-               "Minor/Vocational/MDC/PW-Ap-CE का data इस Template में नहीं आता — वह P3 में Subject Type चुनकर भरें, "
-               "और पूरी List का Backup/Restore '💾 Backup Export' से करें।")
+               "इसी Template जैसे columns वाला '💾 Backup Export' भी यहीं Upload किया जा सकता है।")
     fac_file = st.file_uploader("Guardian Tutors List फ़ाइल चुनें", type=["csv", "xlsx", "xls"], key=f"{key_prefix}_fac_upload")
     if fac_file is None:
         return
@@ -1578,22 +1577,35 @@ elif choice == "P3 — Guardian Tutors List":
             st.download_button("⬇️ CSV Download करें (सिर्फ़ देखने/print के लिए)", _dl.to_csv(index=False).encode("utf-8-sig"),
                                file_name="guardian_tutors_list.csv", mime="text/csv", use_container_width=True)
         with _dlc2:
-            # Backup Export: app ke saare columns (sabhi Subject Types ka Class + SERIAL NO. samet), bina kisi badlaav ke.
-            # Isi file ko upar "📤 फ़ाइल से List अपलोड करें" me dobara upload karke List waisi hi wapas laayi ja sakti hai.
-            _bk = load_faculty().reset_index(drop=True)[FACULTY_COLUMNS]
-            _bk_groups = [
-                (("Department", "Faculty Name", "Designation", "Mobile Number", "Number of Students", "Tutor Department",
-                  "Serial No", "Branch"), "0F2A4A"),
-                (("Minor Class", "Minor Serial No", "Minor Number of Students", "Minor Branch"), "1B6B7A"),
-                (("Vocational Class", "Vocational Serial No", "Vocational Number of Students", "Vocational Branch"), "6B3FA0"),
-                (("MDC Class", "MDC Serial No", "MDC Number of Students", "MDC Branch"), "2E7D32"),
-                (("PWApCE Class", "PWApCE Serial No", "PWApCE Number of Students", "PWApCE Branch"), "8A5A14"),
-            ]
-            st.download_button("💾 Backup Export (दोबारा Upload करने के लिए)",
-                               df_to_formatted_xlsx(_bk, sheet_name="Guardian Tutors Backup", group_colors=_bk_groups),
+            # Backup Export: wahi columns jo P3 ki table me dikhte hain (Template jaisa format) —
+            # isi file ko "📤 फ़ाइल से List अपलोड करें" me dobara upload karke List wapas laayi ja sakti hai.
+            _bk_rows = []
+            for _bi, _br in _fac.reset_index(drop=True).iterrows():
+                _bd, _by = [], []
+                for _bc in str(_br[_p3_class_col]).split("\n"):
+                    if _bc.strip():
+                        _dg_b, _yr_b = parse_allotted_class(_bc)
+                        _bd.append(_dg_b or _bc.strip())
+                        _by.append(_yr_b or "")
+                _bmob = str(_br["Mobile Number"]).strip()
+                _bk_rows.append({
+                    "S.No.": str(_bi + 1),
+                    "Name of Faculty": str(_br["Faculty Name"]).strip(),
+                    "Department": str(_br["Tutor Department"]).strip(),
+                    "Mobile No.": "" if _bmob.strip("_ ") == "" else re.sub(r"\.0$", "", _bmob),
+                    "Degree": "\n".join(_bd),
+                    "Branch": "\n".join(x.strip() for x in str(_br[_p3_branch_col]).split("\n")),
+                    "Year": "\n".join(_by),
+                    "Serial No": "\n".join(x.strip() for x in str(_br[_p3_serial_col]).split("\n")),
+                    "Total Number of Students": _p3_total_from_serial(_br[_p3_serial_col]) or str(_br[_p3_total_col]).strip(),
+                })
+            _bk = pd.DataFrame(_bk_rows, columns=["S.No.", "Name of Faculty", "Department", "Mobile No.", "Degree", "Branch",
+                                                    "Year", "Serial No", "Total Number of Students"])
+            st.download_button("💾 Backup Export (Excel)",
+                               df_to_formatted_xlsx(_bk, sheet_name="Guardian Tutors"),
                                file_name=f"guardian_tutors_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                                mime=XLSX_MIME, use_container_width=True, type="primary",
-                               help="इस फ़ाइल को बाद में P3 → '📤 फ़ाइल से List अपलोड करें' में डालने पर पूरी List (सभी Subject Types समेत) वापस आ जाएगी।")
+                               help="P3 की table वाले ही columns। इसी फ़ाइल को P3 → '📤 फ़ाइल से List अपलोड करें' में डालकर List वापस ला सकते हैं।")
 
     # Degree -> Branch -> Year: teeno dropdown P2 ki List (database) se aate hain aur ek doosre par depend karte hain —
     # Degree chunne par sirf usi Degree ki Branch, Branch chunne par sirf usi (Degree + Branch) ka Year dikhta hai.
