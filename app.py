@@ -693,7 +693,7 @@ st.markdown("""
             font-family: Arial, sans-serif !important; font-size: 11px !important; color: #000 !important;
         }
         .print-only-container th { background-color: #f2f2f2 !important; border: 1px solid #111 !important; padding: 6px !important; font-weight: bold !important; text-align: center !important; }
-        .print-only-container td { border: 1px solid #111 !important; padding: 5px !important; text-align: left !important; }
+        .print-only-container td { border: 1px solid #111 !important; padding: 5px !important; }
         @page { margin: 8mm; size: A4 landscape; }
     }
     .print-only-container { display: none; }
@@ -888,6 +888,35 @@ def df_to_print_html(df):
     for _, r in df.iterrows():
         rows.append("<tr>" + "".join(td_aligned(_h.escape(str(v))) for v in r.values) + "</tr>")
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+
+
+def show_list(df, height=None, max_rows=1500, **_ignored):
+    """Screen par har List ek hi rule se: Heading HAMESHA beech me, Value (number/date/mobile) HAMESHA beech me,
+    Akshar (text) wali cell baayi taraf. st.dataframe ki jagah yeh use hota hai (st.dataframe ka alignment badla nahi ja sakta)."""
+    import html as _h
+    if df is None or len(df.columns) == 0:
+        st.caption("📭 कोई data नहीं।")
+        return
+    _total = len(df)
+    _d = df.head(max_rows).fillna("").astype(str)
+    _th = "".join(f"<th>{_h.escape(str(c))}</th>" for c in _d.columns)
+    _body = []
+    for _row in _d.values.tolist():
+        _body.append("<tr>" + "".join(
+            f'<td class="{"c" if _is_numlike(v) else "l"}">{_h.escape(v)}</td>' for v in _row) + "</tr>")
+    _box = f"max-height:{int(height)}px;" if height else "max-height:520px;"
+    st.markdown(
+        '<style>'
+        '.nep-list{overflow:auto;border:1px solid rgba(128,128,128,.4);border-radius:6px;' + _box + '}'
+        '.nep-list table{width:100%;border-collapse:collapse;font-size:13px;}'
+        '.nep-list th{position:sticky;top:0;background:#eef1f6;color:#0F2A4A;text-align:center !important;font-weight:700;'
+        'border:1px solid rgba(128,128,128,.4);padding:6px 8px;white-space:nowrap;}'
+        '.nep-list td{border:1px solid rgba(128,128,128,.3);padding:5px 8px;}'
+        '.nep-list td.c{text-align:center;} .nep-list td.l{text-align:left;}'
+        '</style><div class="nep-list"><table><thead><tr>' + _th + '</tr></thead><tbody>' + "".join(_body) + '</tbody></table></div>',
+        unsafe_allow_html=True)
+    if _total > max_rows:
+        st.caption(f"⚠️ सिर्फ़ पहली {max_rows} rows दिख रही हैं (कुल {_total}) — पूरी List के लिए Download/Search/Filter इस्तेमाल करें।")
 
 
 def print_button(body_html, label="🖨️ Print करें", height=52):
@@ -1099,7 +1128,7 @@ def faculty_upload_ui(key_prefix):
                  f"फ़ाइल के columns: {', '.join(map(str, fac_raw.columns))}")
         return
 
-    st.dataframe(fac_raw.head(20), use_container_width=True)
+    show_list(fac_raw.head(20), use_container_width=True)
     if st.button("💾 यह List Save करें", type="primary", key=f"{key_prefix}_fac_save_upload"):
         aligned_fac = pd.DataFrame(index=fac_raw.index)
         for c in FACULTY_COLUMNS:
@@ -1373,7 +1402,7 @@ if choice == "P1 — Entry & Upload":
 
                 raw_df = smart_align_columns(raw_df)
                 with st.expander(f"👁️ '{up_file.name}' — {raw_df.shape[0]} rows, {raw_df.shape[1]} columns (Preview)"):
-                    st.dataframe(raw_df.head(20), use_container_width=True)
+                    show_list(raw_df.head(20), use_container_width=True)
 
                 _matched = [c for c in DEFAULT_COLUMNS if c in raw_df.columns]
                 _ignored = [str(c) for c in raw_df.columns if c not in DEFAULT_COLUMNS]
@@ -1443,16 +1472,7 @@ elif choice == "P2 — List":
             s = p2_search.strip().lower()
             p2_view = p2_view[p2_view.apply(lambda r: s in " ".join(str(v).lower() for v in r.values), axis=1)]
         st.caption(f"{len(p2_view)} entries मिलीं।")
-        st.data_editor(
-            p2_view,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Admission Year": st.column_config.TextColumn("📅 Admission Year", width="small"),
-                "Assigned Department": st.column_config.SelectboxColumn("Assigned Department", options=st.session_state.departments, required=False),
-            },
-            key="p2_full_list_editor",
-        )
+        show_list(p2_view.rename(columns={"Admission Year": "📅 Admission Year"}), height=520)
         st.download_button(
             "⬇️ पूरी List CSV Download करें",
             p2_view.to_csv(index=False).encode("utf-8-sig"),
@@ -1746,7 +1766,7 @@ elif choice == "P3 — Guardian Tutors List":
                 "Father Name": _stu["Father Name"].astype(str).str.strip() if "Father Name" in _stu.columns else "",
                 "Tutor": [_tk.get(n, "—") for n in range(1, len(_stu) + 1)],
             })
-            st.dataframe(_tbl, hide_index=True, use_container_width=True)
+            show_list(_tbl, hide_index=True, use_container_width=True)
 
     def _p3_validate(rows, exclude_idx):
         """rows = [(class_text, branch, serial_text)] — galtiyon ki list lautata hai (khaali = sab theek)"""
@@ -2501,7 +2521,7 @@ elif choice == "P5 — Print Panel":
 
             st.markdown("---")
             st.subheader("👁️ Preview")
-            st.dataframe(preview_df, use_container_width=True, hide_index=True)
+            show_list(preview_df, use_container_width=True, hide_index=True)
 
             # ---- Agar chuni gayi Guardian Tutor ke Students me ek se zyada Class (Current Year)
             # mili, to Print me har Class ke liye yeh Header dobara shuru hoga (S.No bhi 1 se) ----
@@ -2575,7 +2595,7 @@ elif choice == "P6 — Admin Panel":
         if not db.empty:
             st.markdown("**Department-wise Approved Count:**")
             dept_counts = db[db["Status"] == "Approved"]["Assigned Department"].value_counts()
-            st.dataframe(dept_counts.rename_axis("Department").reset_index(name="Count"), use_container_width=True, hide_index=True)
+            show_list(dept_counts.rename_axis("Department").reset_index(name="Count"), use_container_width=True, hide_index=True)
 
         st.markdown("---")
         st.markdown("**🎓 Degree / Major / Minor / MDC / Vocational / PW-AP-CE — कितनी-कितनी हैं**")
@@ -2606,7 +2626,7 @@ elif choice == "P6 — Admin Panel":
                         _p6_flat = [normalize_course_year(v) for v in _p6_flat]
                     if _p6_flat:
                         _p6_vc = pd.Series(_p6_flat).value_counts().rename_axis(_p6_label).reset_index(name="कितने Students")
-                        st.dataframe(_p6_vc, use_container_width=True, hide_index=True)
+                        show_list(_p6_vc, use_container_width=True, hide_index=True)
                     else:
                         st.caption("कोई data भरा नहीं मिला।")
 
@@ -2617,7 +2637,7 @@ elif choice == "P6 — Admin Panel":
             {"Username": u, "Role": v.get("role"), "Department": v.get("department", "-"), "Label": v.get("label", "")}
             for u, v in creds.items()
         ])
-        st.dataframe(users_table, use_container_width=True, hide_index=True)
+        show_list(users_table, use_container_width=True, hide_index=True)
 
         st.markdown("---")
         st.markdown("**🗑️ User हटाएँ**")
@@ -2656,7 +2676,7 @@ elif choice == "P6 — Admin Panel":
         if _dflash:
             st.success(_dflash)
         depts = st.session_state.departments
-        st.dataframe(pd.DataFrame({"Department": depts}), use_container_width=True, hide_index=True)
+        show_list(pd.DataFrame({"Department": depts}), use_container_width=True, hide_index=True)
         add_col, del_col = st.columns(2)
         with add_col:
             new_dept_name = st.text_input("नया Department नाम")
@@ -2802,7 +2822,7 @@ elif choice == "P6 — Admin Panel":
                     _p6d_sel_orig_idx = _p6d_view.iloc[_p6d_sel_positions].index.tolist()
                     st.warning(f"⚠️ {len(_p6d_sel_positions)} row(s) select की गई हैं — Delete करने से पहले ध्यान से देख लें, यह Database से हमेशा के लिए हट जाएँगी।")
                     with st.expander("👁️ Select की गई rows देखें"):
-                        st.dataframe(_p6d_view.loc[_p6d_sel_orig_idx], use_container_width=True, hide_index=True)
+                        show_list(_p6d_view.loc[_p6d_sel_orig_idx], use_container_width=True, hide_index=True)
                     if st.button(f"🗑️ Selected {len(_p6d_sel_positions)} Row(s) Delete करें", type="secondary", key="p6_data_delete_btn"):
                         db = db.drop(index=_p6d_sel_orig_idx).reset_index(drop=True)
                         save_db(db)
