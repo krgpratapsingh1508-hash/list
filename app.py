@@ -779,6 +779,10 @@ st.markdown("""
         background: #F1FAF4 !important; color: #1B6B3A !important; border: 1.5px dashed #8AC9A0 !important;
     }
 
+    [class*="st-key-p3_backup_dl"] button {
+        background: linear-gradient(135deg, #0F2A4A 0%, #1D4A7A 60%, #2A5E96 100%) !important; color: #fff !important;
+    }
+
     /* ---------- Inputs / Dropdowns ---------- */
     .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input,
     .stSelectbox div[data-baseweb="select"] > div, .stMultiSelect div[data-baseweb="select"] > div {
@@ -1604,7 +1608,7 @@ elif choice == "P3 — Guardian Tutors List":
             st.download_button("💾 Backup Export (Excel)",
                                df_to_formatted_xlsx(_bk, sheet_name="Guardian Tutors"),
                                file_name=f"guardian_tutors_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                               mime=XLSX_MIME, use_container_width=True, type="primary",
+                               mime=XLSX_MIME, use_container_width=True, key="p3_backup_dl",
                                help="P3 की table वाले ही columns। इसी फ़ाइल को P3 → '📤 फ़ाइल से List अपलोड करें' में डालकर List वापस ला सकते हैं।")
 
     # Degree -> Branch -> Year: teeno dropdown P2 ki List (database) se aate hain aur ek doosre par depend karte hain —
@@ -2152,6 +2156,11 @@ elif choice == "P5 — Print Panel":
             _lbl += f" (#{_i + 1})"
         _p5_opts_early[_lbl] = _r
     _p5_current_pick = st.session_state.get("ph_guardian_pick")
+    # Agar P3 me sirf ek hi Tutor hai to wahi pehle se chuna hota hai — ise shuru me hi pakka kar do, taaki uski
+    # Class / Serial / List pehli baar me hi aa jaye (warna dropdown me naam dikhta par List khaali aati thi)
+    if _p5_current_pick is None and len(_p5_opts_early) == 1:
+        _p5_current_pick = next(iter(_p5_opts_early))
+        st.session_state["ph_guardian_pick"] = _p5_current_pick
     st.session_state["ph_allotted_lines"] = []
     st.session_state["ph_sel_defs"] = []
     st.session_state["ph_line_opts"] = []
@@ -2291,8 +2300,7 @@ elif choice == "P5 — Print Panel":
     _p5_choices = [_p5_blank_opt] + list(_p5_opts.keys())
     if st.session_state.get("ph_guardian_pick") not in _p5_choices:
         st.session_state.pop("ph_guardian_pick", None)        # List बदल गई हो तो पुरानी चॉइस हटाएँ
-    _p5_pick = st.selectbox("Guardian Tutor चुनें (P3 की List से)", _p5_choices, key="ph_guardian_pick",
-                            index=1 if len(_p5_opts) == 1 else 0)
+    _p5_pick = st.selectbox("Guardian Tutor चुनें (P3 की List से)", _p5_choices, key="ph_guardian_pick")
     if _p5_pick == _p5_blank_opt:
         st.session_state.ph_guardian_name = ""
         st.session_state.ph_guardian_mobile = ""
@@ -2387,6 +2395,11 @@ elif choice == "P5 — Print Panel":
         if not _keep5:
             st.warning("⚠️ इस Tutor के लिए कोई Student नहीं मिला। P3 में इसकी हर लाइन की स्थिति:  \n"
                        + "  \n".join(f"• {_d}" for _d in _diag5 or ["P3 में इस Tutor का कोई Allotted Class / Serial नहीं भरा है"])
+                       + (f"  \n\n🔍 P3 की file में इस Tutor (row) की असली saved values — "
+                          f"Name: `{_p5_trow['Faculty Name']!r}` | Mobile: `{_p5_trow['Mobile Number']!r}` | "
+                          f"Allotted Class: `{_p5_trow['Department']!r}` | Branch: `{_p5_trow['Branch']!r}` | "
+                          f"Serial: `{_p5_trow['Serial No']!r}` | Tutor Department: `{_p5_trow['Tutor Department']!r}`"
+                          if not _diag5 else "")
                        + "  \n\nजाँचें: P3 → ✏️ Edit में Degree, Branch, Year और FROM/TO SERIAL NO. भरे हों, और P2 की List में वही Degree/Branch/Year हो।")
         st.caption(f"👩‍🏫 **{_p5_guardian_active}** — P3 में दिए गए Class + SERIAL NO. के Students (नाम के A–Z क्रम में) दिखाए जा रहे हैं।")
 
