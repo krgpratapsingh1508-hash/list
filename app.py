@@ -1569,8 +1569,62 @@ elif choice == "P3 — Guardian Tutors List":
         _sort_mode = st.radio("↕️ List कैसे लगाएँ", list(_sort_labels), format_func=lambda k: _sort_labels[k],
                               horizontal=True, key="p3_sort_mode")
         _fac_view = sort_faculty_view(_fac, _sort_mode)   # index wahi rehta hai, isliye Edit/Assign sahi Tutor par chalte hain
-        _col_widths = [0.5, 2.0, 1.3, 1.2, 1.0, 1.3, 1.0, 1.1, 1.1, 1.2]
-        _headers = ["S.No.", "Name of Faculty", "Department", "Mobile No.", "Degree", "Branch", "Year",
+        # ---- ☑️ SELECT + 🗑️ DELETE: list me se ek ya ek se zyada Tutors chunkar ek saath hatana ----
+        _all_idx = list(_fac_view.index)
+
+        def _p3_toggle_all(_idxs):
+            _v = bool(st.session_state.get("p3_sel_all", False))
+            for _i in _idxs:
+                st.session_state[f"p3_sel_{_i}"] = _v
+
+        def _p3_clear_selection():
+            for _k in [k for k in list(st.session_state.keys()) if k.startswith("p3_sel_")]:
+                st.session_state.pop(_k, None)
+            st.session_state.pop("p3_confirm_del", None)
+
+        _sel_idx = [i for i in _all_idx if st.session_state.get(f"p3_sel_{i}", False)]
+        _sb1, _sb2 = st.columns([2, 3])
+        with _sb1:
+            st.checkbox(f"☑️ सभी Select करें ({len(_all_idx)})", key="p3_sel_all",
+                        on_change=_p3_toggle_all, args=(_all_idx,))
+        with _sb2:
+            if _sel_idx:
+                if st.button(f"🗑️ चुने गए {len(_sel_idx)} Tutor(s) Delete करें", key="p3_bulk_delete_btn",
+                             type="secondary", use_container_width=True):
+                    st.session_state["p3_confirm_del"] = list(_sel_idx)
+                    st.rerun()
+            else:
+                st.caption("Delete करने के लिए नीचे List में Tutor के आगे ☑️ टिक करें।")
+
+        _confirm_del = [i for i in st.session_state.get("p3_confirm_del", []) if i in _fac.index]
+        if _confirm_del:
+            _names = [str(_fac.loc[i, "Faculty Name"]).strip() or "(बिना नाम)" for i in _confirm_del]
+            st.warning(f"⚠️ क्या आप पक्का इन {len(_confirm_del)} Tutor(s) को हमेशा के लिए हटाना चाहते हैं?  \n"
+                       + ", ".join(_names)
+                       + "  \n(Delete से पहले Tutors List की एक Backup copy अपने आप बन जाती है।)")
+            _dc1, _dc2 = st.columns(2)
+            with _dc1:
+                if st.button("✅ हाँ, Delete करें", type="primary", use_container_width=True, key="p3_bulk_delete_yes"):
+                    import shutil
+                    try:
+                        shutil.copyfile(FACULTY_FILE, FACULTY_FILE + ".bak")
+                    except Exception:
+                        pass
+                    _fac_new = _fac.drop(index=_confirm_del).reset_index(drop=True)
+                    save_faculty(_fac_new)
+                    _p3_clear_selection()
+                    st.session_state.pop("p3_sel_all", None)
+                    st.session_state.pop("p3_edit_idx", None)
+                    st.session_state.pop("p3_assign_idx", None)
+                    st.session_state["p3_fac_flash"] = f"🗑️ {len(_confirm_del)} Tutor(s) हटा दिए गए। अब List में {len(_fac_new)} Tutors हैं।"
+                    st.rerun()
+            with _dc2:
+                if st.button("✖️ नहीं, Cancel", use_container_width=True, key="p3_bulk_delete_no"):
+                    st.session_state.pop("p3_confirm_del", None)
+                    st.rerun()
+
+        _col_widths = [0.5, 0.5, 2.0, 1.3, 1.2, 1.0, 1.3, 1.0, 1.1, 1.1, 1.2]
+        _headers = ["☑️", "S.No.", "Name of Faculty", "Department", "Mobile No.", "Degree", "Branch", "Year",
                     "Serial No.", "Total Number of Students", "⚙️ Actions"]
         _hcols = st.columns(_col_widths)
         for _hc, _htxt in zip(_hcols, _headers):
@@ -1582,7 +1636,8 @@ elif choice == "P3 — Guardian Tutors List":
             _tot_disp = _p3_total_from_serial(_arow[_p3_serial_col]) or _arow[_p3_total_col] or "—"
             _rc = st.columns(_col_widths)
             _ctr = lambda v: f"<div style='text-align:center;'>{v}</div>"      # Number hamesha beech me
-            _rc[0].markdown(_ctr(_sn), unsafe_allow_html=True)
+            _rc[0].checkbox("चुनें", key=f"p3_sel_{_aidx}", label_visibility="collapsed")
+            _rc = _rc[1:]
             # Degree aur Year — Allotted Class text (jaise "PGDCA I Year") se alag-alag nikalte hain, har line ke liye
             _deg_lines, _yr_lines = [], []
             for _cl in str(_arow[_p3_class_col]).split("\n"):
