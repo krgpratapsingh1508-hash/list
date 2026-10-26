@@ -1840,6 +1840,8 @@ elif choice == "P5 — Print Panel":
         _p5_opts_early[_lbl] = _r
     _p5_current_pick = st.session_state.get("ph_guardian_pick")
     st.session_state["ph_allotted_lines"] = []
+    st.session_state["ph_sel_defs"] = []
+    st.session_state["ph_line_opts"] = []
     if _p5_current_pick and _p5_current_pick in _p5_opts_early:
         _p5_row_early = _p5_opts_early[_p5_current_pick]
         _cls_lines = [c.strip() for c in str(_p5_row_early["Department"]).split("\n")]
@@ -1851,21 +1853,41 @@ elif choice == "P5 — Print Panel":
             _s = _srl_lines[_pi] if _pi < len(_srl_lines) else ""
             if _c or _s:
                 _allotted_pairs.append((_c, _s))
-        _built_lines = []
-        for _c, _s in _allotted_pairs:
+        _br_lines_early = [b.strip() for b in str(_p5_row_early["Branch"]).split("\n")]
+        _defs = []
+        for _pi in range(_pair_n):
+            _c = _cls_lines[_pi] if _pi < len(_cls_lines) else ""
             if not _c:
                 continue
+            _s = _srl_lines[_pi] if _pi < len(_srl_lines) else ""
+            _b = _br_lines_early[_pi] if _pi < len(_br_lines_early) else ""
             _p_course, _p_year = parse_allotted_class(_c)
             _p_year_lbl = COURSE_YEAR_PRINT_LABELS.get(_p_year, _p_year)
             _line_txt = f"{_p_course} {_p_year_lbl}".strip()
             if _s:
                 _line_txt += f" ({_s})"
-            _built_lines.append(_line_txt)
+            _defs.append({"c": _c, "s": _s, "b": _b, "label": _line_txt})
+        # Ek se zyada List (Class line) ho to pehle puchha jaata hai ki kaun si List print karni hai
+        _ALL_LISTS_OPT = "📚 सभी Lists (एक साथ)"
+        _line_opts = []
+        if len(_defs) > 1:
+            _line_opts = [f"{_n + 1}. {_d['label']}" + (f" — {_d['b']}" if _d["b"] else "") for _n, _d in enumerate(_defs)]
+            _line_opts.append(_ALL_LISTS_OPT)
+            if st.session_state.get("ph_line_pick") not in _line_opts:
+                st.session_state["ph_line_pick"] = _line_opts[0]
+            _pk = st.session_state["ph_line_pick"]
+            _sel_defs = _defs if _pk == _ALL_LISTS_OPT else [_defs[_line_opts.index(_pk)]]
+        else:
+            _sel_defs = _defs
+        st.session_state["ph_line_opts"] = _line_opts
+        st.session_state["ph_sel_defs"] = _sel_defs
+        _built_lines = [_d["label"] for _d in _sel_defs]
         st.session_state["ph_allotted_lines"] = _built_lines
         # Sirf tab auto-fill karo jab Tutor ki selection abhi-abhi badli ho — taaki
         # baad me haath se badla gaya Course/Class dobara reset na ho
-        if st.session_state.get("ph_last_auto_guardian") != _p5_current_pick and _allotted_pairs:
-            _auto_course, _auto_year = parse_allotted_class(_allotted_pairs[0][0])
+        _auto_key = f"{_p5_current_pick}|{_sel_defs[0]['c'] if _sel_defs else ''}"
+        if st.session_state.get("ph_last_auto_guardian") != _auto_key and _allotted_pairs:
+            _auto_course, _auto_year = parse_allotted_class(_sel_defs[0]["c"] if _sel_defs else _allotted_pairs[0][0])
             if _auto_course:
                 if _auto_course in COURSE_NAME_OPTIONS:
                     st.session_state["ph_course_pick"] = _auto_course
@@ -1880,7 +1902,7 @@ elif choice == "P5 — Print Panel":
                 else:
                     st.session_state["ph_class_pick"] = _PH_OTHER_OPT
                     st.session_state["ph_class_custom"] = _auto_year
-            st.session_state["ph_last_auto_guardian"] = _p5_current_pick
+            st.session_state["ph_last_auto_guardian"] = _auto_key
     else:
         st.session_state["ph_last_auto_guardian"] = _p5_current_pick
 
@@ -1975,6 +1997,10 @@ elif choice == "P5 — Print Panel":
             st.caption("📚 इस Tutor के Allotted Class (P3 से) — Header में यह सब ek ke niche ek print होंगे:  \n"
                        + "  \n".join(f"• {_l}" for _l in st.session_state["ph_allotted_lines"]))
 
+    if st.session_state.get("ph_line_opts"):
+        st.selectbox("📋 इस Tutor की एक से ज़्यादा List हैं — कौन सी List Print करनी है?",
+                     st.session_state["ph_line_opts"], key="ph_line_pick")
+
     _blank_line = "&nbsp;" * 22
 
     def _build_header_html(font_family, line2_override=None):
@@ -2023,16 +2049,11 @@ elif choice == "P5 — Print Panel":
     if _p5_guardian_active and _p5_pick != _p5_blank_opt:
         _p5_trow = _p5_opts[_p5_pick]
         _nk5 = lambda v: re.sub(r"[^a-z0-9]", "", str(v).lower())
-        _cl5 = str(_p5_trow["Department"]).split("\n")
-        _br5 = str(_p5_trow["Branch"]).split("\n")
-        _sl5 = str(_p5_trow["Serial No"]).split("\n")
         _keep5, _diag5 = [], []
-        for _li5, _c5 in enumerate(_cl5):
-            if not _c5.strip():
-                continue
+        for _d5 in st.session_state.get("ph_sel_defs", []):
+            _c5, _b5, _s5 = _d5["c"], _d5["b"].strip(), _d5["s"]
             _dg5, _yr5 = parse_allotted_class(_c5)
-            _b5 = _br5[_li5].strip() if _li5 < len(_br5) else ""
-            _rg5 = _p3_parse_ranges(_sl5[_li5] if _li5 < len(_sl5) else "")[0]
+            _rg5 = _p3_parse_ranges(_s5)[0]
             _cls5 = db
             if _b5 and _b5 != "ALL" and "Branch" in _cls5.columns:
                 _cls5 = _cls5[_cls5["Branch"].astype(str).str.strip() == _b5]
@@ -2045,7 +2066,7 @@ elif choice == "P5 — Print Panel":
             for _a5, _z5 in _rg5:
                 _keep5.extend(_idx5[_a5 - 1:_z5])
             _diag5.append(f"{_c5.strip()} / Branch: {_b5 or '—'} → P2 में {len(_idx5)} Students, "
-                          f"Serial: {_sl5[_li5].strip() if _li5 < len(_sl5) and _sl5[_li5].strip() else 'खाली'}")
+                          f"Serial: {_s5.strip() or 'खाली'}")
         pp_view = pp_view[pp_view.index.isin(_keep5)]
         if not _keep5:
             st.warning("⚠️ इस Tutor के लिए कोई Student नहीं मिला। P3 में इसकी हर लाइन की स्थिति:  \n"
@@ -2058,7 +2079,7 @@ elif choice == "P5 — Print Panel":
     # ---- Header Line 3: "<Title 3>, Major Subject - <Branch>" ----
     # Branch: chune gaye Guardian Tutor ki P3 wali Branch(es); Tutor nahi chuna to is List ke Students ki Branch
     if _p5_pick != _p5_blank_opt:
-        _ms_src = [b.strip() for b in str(_p5_opts[_p5_pick]["Branch"]).split("\n")]
+        _ms_src = [d["b"].strip() for d in st.session_state.get("ph_sel_defs", []) if d["b"].strip().upper() != "ALL"]
     else:
         _ms_src = [str(b).strip() for b in pp_view["Branch"]] if "Branch" in pp_view.columns else []
     _major_subj = ", ".join(dict.fromkeys(b for b in _ms_src if b))
@@ -2096,9 +2117,21 @@ elif choice == "P5 — Print Panel":
             st.caption(f"Database में कुल {len(db)} records हैं। Status-wise: {_counts}.")
     else:
         default_print_cols = [c for c in ["Unique ID", "Student Name", "Father Name", "Mobile Number"] if c in ALL_COLUMNS]
+        # Branch ALL wali List ho to aakhri column me "Major Subject" (Student ki Branch) apne aap judta hai;
+        # kisi khaas Branch wali List me ye tab tak nahi aata jab tak aap Columns me haath se na jodein
+        _p5_all_branch = any(d["b"].strip().upper() == "ALL" for d in st.session_state.get("ph_sel_defs", []))
+        if "pp_cols" not in st.session_state:
+            st.session_state["pp_cols"] = default_print_cols + (["Branch"] if _p5_all_branch and "Branch" in ALL_COLUMNS else [])
+        else:
+            _cur_cols = list(st.session_state["pp_cols"])
+            _prev_auto = st.session_state.get("pp_branch_auto_prev", False)
+            if _p5_all_branch and not _prev_auto and "Branch" not in _cur_cols and "Branch" in ALL_COLUMNS:
+                st.session_state["pp_cols"] = _cur_cols + ["Branch"]
+            elif _prev_auto and not _p5_all_branch and "Branch" in _cur_cols:
+                st.session_state["pp_cols"] = [c for c in _cur_cols if c != "Branch"]
+        st.session_state["pp_branch_auto_prev"] = _p5_all_branch
         pp_cols = st.multiselect(
             "Print के लिए Columns चुनें (S.No अपने आप जुड़ जाएगा)", ALL_COLUMNS,
-            default=default_print_cols,
             format_func=lambda c: PRINT_LABEL_OVERRIDES.get(c, c),
             key="pp_cols",
         )
