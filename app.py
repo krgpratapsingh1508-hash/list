@@ -702,6 +702,167 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================================
+# ✨ THEME CSS v2 — Buttons / Inputs / Cards / Metrics ka premium look (upar wali theme ke upar lagta hai)
+# ==========================================================
+st.markdown("""
+    <style>
+    :root {
+        --pg-radius: 12px;
+        --pg-shadow-sm: 0 1px 2px rgba(15,42,74,.06), 0 2px 8px rgba(15,42,74,.06);
+        --pg-shadow-md: 0 6px 18px rgba(15,42,74,.14);
+        --pg-ring: 0 0 0 3px rgba(201,151,63,.28);
+    }
+
+    /* ---------- Page background: halka gradient ---------- */
+    [data-testid="stAppViewContainer"] {
+        background: radial-gradient(1200px 500px at 85% -10%, rgba(201,151,63,.10), transparent 60%),
+                    radial-gradient(900px 500px at -10% 0%, rgba(29,74,122,.08), transparent 55%),
+                    var(--pg-bg) !important;
+    }
+    .block-container { max-width: 1250px !important; }
+
+    /* ---------- Buttons (sabhi) ---------- */
+    .stButton > button, .stDownloadButton > button, .stFormSubmitButton > button, .stLinkButton > a {
+        min-height: 44px !important; border-radius: 12px !important;
+        font-family: 'Poppins','Inter',sans-serif !important; font-size: 14.5px !important;
+        font-weight: 600 !important; letter-spacing: .15px !important;
+        padding: .55rem 1.25rem !important; line-height: 1.2 !important;
+        box-shadow: var(--pg-shadow-sm) !important;
+        transition: transform .14s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease, filter .18s ease !important;
+    }
+    .stButton > button:hover, .stDownloadButton > button:hover, .stFormSubmitButton > button:hover {
+        transform: translateY(-2px) !important; box-shadow: var(--pg-shadow-md) !important;
+    }
+    .stButton > button:active, .stDownloadButton > button:active, .stFormSubmitButton > button:active {
+        transform: translateY(0) scale(.985) !important; box-shadow: var(--pg-shadow-sm) !important; filter: brightness(.96);
+    }
+    .stButton > button:focus-visible, .stDownloadButton > button:focus-visible { outline: none !important; box-shadow: var(--pg-ring) !important; }
+    .stButton > button:disabled, .stDownloadButton > button:disabled {
+        opacity: .45 !important; transform: none !important; box-shadow: none !important; cursor: not-allowed !important;
+    }
+    /* Primary — Navy */
+    .stButton > button[kind="primary"], .stFormSubmitButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #0F2A4A 0%, #1D4A7A 60%, #2A5E96 100%) !important;
+        color: #fff !important; border: 1px solid rgba(255,255,255,.12) !important;
+    }
+    .stButton > button[kind="primary"]:hover { box-shadow: 0 8px 22px rgba(15,42,74,.34) !important; filter: brightness(1.06); }
+    /* Secondary — Clean outline */
+    .stButton > button[kind="secondary"], .stFormSubmitButton > button[kind="secondary"] {
+        background: #fff !important; color: var(--pg-navy) !important; border: 1.5px solid #C5D0DE !important;
+    }
+    .stButton > button[kind="secondary"]:hover { background: #F2F6FC !important; border-color: var(--pg-navy) !important; }
+    /* Download — Gold */
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #A97A25 0%, #C9973F 55%, #E0B35E 100%) !important;
+        color: #fff !important; border: 1px solid rgba(255,255,255,.25) !important; text-shadow: 0 1px 0 rgba(0,0,0,.12);
+    }
+    .stDownloadButton > button:hover { box-shadow: 0 8px 22px rgba(201,151,63,.45) !important; filter: brightness(1.05); }
+
+    /* ---------- Table ke Actions: chhote icon buttons (✏️ Edit / 📌 Assign) ---------- */
+    [class*="st-key-p3_edit_btn_"] button, [class*="st-key-p3_assign_btn_"] button {
+        min-height: 38px !important; padding: .3rem .4rem !important; border-radius: 10px !important; font-size: 17px !important;
+    }
+    [class*="st-key-p3_edit_btn_"] button { background: #EAF2FF !important; border: 1.5px solid #B9D3F5 !important; color: #1D4A7A !important; }
+    [class*="st-key-p3_edit_btn_"] button:hover { background: #1D4A7A !important; border-color: #1D4A7A !important; }
+    [class*="st-key-p3_assign_btn_"] button { background: #FFF5DF !important; border: 1.5px solid #EBD39B !important; color: #A97A25 !important; }
+    [class*="st-key-p3_assign_btn_"] button:hover { background: #C9973F !important; border-color: #C9973F !important; }
+    /* Delete / Cancel / Remove — alag pehchaan */
+    [class*="st-key-p3_edit_delete_btn"] button {
+        background: #FFF0F0 !important; color: #B42318 !important; border: 1.5px solid #F4B9B4 !important;
+    }
+    [class*="st-key-p3_edit_delete_btn"] button:hover { background: #B42318 !important; color: #fff !important; border-color: #B42318 !important; }
+    [class*="st-key-p3_edit_cancel_btn"] button, [class*="st-key-p3_cancel_assign_"] button {
+        background: #F3F5F8 !important; color: #4A5568 !important; border: 1.5px solid #D5DBE4 !important;
+    }
+    [class*="st-key-p3_add_rmcls_btn"] button, [class*="st-key-p3_edit_rmcls_btn"] button { color: #B42318 !important; border-color: #F0C4C0 !important; }
+    [class*="st-key-p3_add_addcls_btn"] button, [class*="st-key-p3_edit_addcls_btn"] button {
+        background: #F1FAF4 !important; color: #1B6B3A !important; border: 1.5px dashed #8AC9A0 !important;
+    }
+
+    /* ---------- Inputs / Dropdowns ---------- */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input,
+    .stSelectbox div[data-baseweb="select"] > div, .stMultiSelect div[data-baseweb="select"] > div {
+        background: #fff !important; border: 1.5px solid #D5DEEA !important; border-radius: 10px !important;
+        min-height: 44px !important; transition: border-color .15s ease, box-shadow .15s ease !important;
+    }
+    .stTextInput input:hover, .stSelectbox div[data-baseweb="select"] > div:hover, .stMultiSelect div[data-baseweb="select"] > div:hover { border-color: #9FB3CC !important; }
+    .stTextInput input:focus, .stNumberInput input:focus, .stTextArea textarea:focus,
+    .stSelectbox div[data-baseweb="select"] > div:focus-within, .stMultiSelect div[data-baseweb="select"] > div:focus-within {
+        border-color: var(--pg-gold) !important; box-shadow: var(--pg-ring) !important;
+    }
+    label[data-testid="stWidgetLabel"] p {
+        font-family: 'Poppins','Inter',sans-serif !important; font-size: 12.5px !important; font-weight: 600 !important;
+        color: #35506F !important; letter-spacing: .25px; text-transform: none;
+    }
+    .stMultiSelect span[data-baseweb="tag"] {
+        background: linear-gradient(135deg, #0F2A4A, #1D4A7A) !important; color: #fff !important; border-radius: 8px !important;
+    }
+    div[data-baseweb="popover"] ul[role="listbox"] { border-radius: 12px !important; box-shadow: var(--pg-shadow-md) !important; }
+    div[data-baseweb="popover"] li[role="option"]:hover { background: #FFF5DF !important; }
+    div[data-baseweb="popover"] li[aria-selected="true"] { background: #EAF2FF !important; font-weight: 600 !important; }
+
+    /* ---------- Checkbox / Radio ---------- */
+    .stCheckbox label { padding: 2px 0; }
+    .stCheckbox input:checked + div, .stCheckbox [data-baseweb="checkbox"] div[role="checkbox"][aria-checked="true"] {
+        background-color: var(--pg-navy) !important; border-color: var(--pg-navy) !important;
+    }
+    /* Main area ka horizontal radio = segmented control */
+    section.main div[role="radiogroup"][aria-orientation="horizontal"], [data-testid="stMain"] div[role="radiogroup"][aria-orientation="horizontal"],
+    [data-testid="stMain"] div[role="radiogroup"]:has(> label):not([aria-orientation="vertical"]) {
+        gap: 6px !important; background: #E9EEF5; padding: 5px; border-radius: 14px; display: inline-flex; flex-wrap: wrap;
+    }
+    [data-testid="stMain"] div[role="radiogroup"]:not([aria-orientation="vertical"]) > label {
+        background: transparent; padding: 7px 16px; border-radius: 10px; margin: 0 !important; cursor: pointer; transition: all .15s ease;
+    }
+    [data-testid="stMain"] div[role="radiogroup"]:not([aria-orientation="vertical"]) > label:has(input:checked) {
+        background: #fff; box-shadow: var(--pg-shadow-sm); color: var(--pg-navy);
+    }
+    [data-testid="stMain"] div[role="radiogroup"]:not([aria-orientation="vertical"]) > label:has(input:checked) p { font-weight: 700 !important; color: var(--pg-navy) !important; }
+    [data-testid="stMain"] div[role="radiogroup"]:not([aria-orientation="vertical"]) > label > div:first-child { display: none !important; }
+
+    /* ---------- Metric cards (kul Students / Year-wise) ---------- */
+    [data-testid="stMetric"] {
+        background: linear-gradient(180deg, #fff 0%, #F8FAFD 100%); border: 1px solid var(--pg-border);
+        border-left: 5px solid var(--pg-gold); border-radius: var(--pg-radius); padding: 14px 18px !important;
+        box-shadow: var(--pg-shadow-sm); transition: transform .15s ease, box-shadow .15s ease;
+    }
+    [data-testid="stMetric"]:hover { transform: translateY(-2px); box-shadow: var(--pg-shadow-md); }
+    [data-testid="stMetricLabel"] p { font-weight: 600 !important; color: #5B6B80 !important; font-size: 13px !important; }
+    [data-testid="stMetricValue"] { font-family: 'Poppins',sans-serif !important; color: var(--pg-navy) !important; font-weight: 700 !important; }
+
+    /* ---------- Expander = card ---------- */
+    [data-testid="stExpander"] {
+        background: #fff; border: 1px solid var(--pg-border) !important; border-radius: 14px !important;
+        box-shadow: var(--pg-shadow-sm); overflow: hidden;
+    }
+    [data-testid="stExpander"] summary { font-family: 'Poppins',sans-serif; font-weight: 600; color: var(--pg-navy); padding: 12px 16px !important; }
+    [data-testid="stExpander"] summary:hover { background: #F5F8FC; }
+    [data-testid="stExpander"] details[open] > summary { border-bottom: 1px solid var(--pg-border); background: #F8FAFD; }
+
+    /* ---------- Alerts / captions / tables ---------- */
+    div[data-testid="stAlert"] { border-radius: 12px !important; box-shadow: var(--pg-shadow-sm); border: 1px solid rgba(15,42,74,.08) !important; }
+    [data-testid="stCaptionContainer"] { line-height: 1.55; }
+    div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] { border-radius: 14px !important; box-shadow: var(--pg-shadow-sm) !important; }
+    hr { border-color: #E3E9F1 !important; }
+    .stSpinner, [data-testid="stStatusWidget"] { color: var(--pg-gold-dark) !important; }
+
+    /* ---------- Scrollbar ---------- */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #C3CEDC; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+    ::-webkit-scrollbar-thumb:hover { background: #9FB0C6; background-clip: content-box; border: 2px solid transparent; }
+
+    /* ---------- Mobile ---------- */
+    @media (max-width: 640px) {
+        .block-container { padding: 1rem .8rem 3rem !important; }
+        .stButton > button, .stDownloadButton > button { width: 100% !important; min-height: 48px !important; }
+        [data-testid="stMetric"] { padding: 10px 12px !important; }
+        [data-testid="stMain"] div[role="radiogroup"]:not([aria-orientation="vertical"]) { display: flex !important; width: 100%; }
+    }
+    @media print { .stButton, .stDownloadButton { display: none !important; } }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==========================================================
 # 🖨️ PRINT HELPER — button dabate hi browser ka Print dialog khulta hai
 # (sirf diya gaya HTML print hota hai; Streamlit page ka baaki hissa nahi)
 # ==========================================================
@@ -719,8 +880,18 @@ def print_button(body_html, label="🖨️ Print करें", height=52):
     )
     payload = json.dumps(doc).replace("</", "<\\/")
     components.html(f"""
-    <button id="pb" style="width:100%;padding:9px 12px;border:none;border-radius:8px;cursor:pointer;
-        background:#0F2A4A;color:#fff;font-size:15px;font-weight:600;font-family:Arial,sans-serif;">{label}</button>
+    <style>
+      body {{ margin:0; }}
+      #pb {{ width:100%; min-height:44px; padding:10px 16px; border:1px solid rgba(255,255,255,.14); border-radius:12px; cursor:pointer;
+             background:linear-gradient(135deg,#0F2A4A 0%,#1D4A7A 60%,#2A5E96 100%); color:#fff; font-size:14.5px; font-weight:600;
+             letter-spacing:.15px; font-family:'Poppins','Inter',Arial,sans-serif;
+             box-shadow:0 1px 2px rgba(15,42,74,.06),0 2px 8px rgba(15,42,74,.10);
+             transition:transform .14s ease, box-shadow .18s ease, filter .18s ease; }}
+      #pb:hover {{ transform:translateY(-2px); box-shadow:0 8px 22px rgba(15,42,74,.34); filter:brightness(1.06); }}
+      #pb:active {{ transform:scale(.985); filter:brightness(.96); }}
+      #pb:focus-visible {{ outline:none; box-shadow:0 0 0 3px rgba(201,151,63,.35); }}
+    </style>
+    <button id="pb">{label}</button>
     <script>
     const DOC = {payload};
     document.getElementById('pb').addEventListener('click', function() {{
