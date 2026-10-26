@@ -2016,16 +2016,42 @@ elif choice == "P5 — Print Panel":
         pp_view = pp_view[pp_view["Assigned Department"] == user_dept]
         st.caption(f"Department: **{user_dept}**")
 
-    # ---- Upar jo Guardian Tutor चुना गया hai, usi ko P3 me जो Students Assign हुए थे
-    # (P3 → Actions → 📌 Assign se "Assigned Tutor" field bharti hai) — unhi ki List seedhe yahan aa jaye ----
+    # ---- Upar jo Guardian Tutor chuna gaya hai, uske P3 wale Allotted Class (Degree + Branch + Year) aur
+    # FROM-TO SERIAL NO. ke hisaab se Students apne aap aate hain: us Class ke Students ko Name se A-Z karke
+    # 1..N Serial milta hai, aur Tutor ke Serial range wale Students hi List me aate hain. ----
     _p5_guardian_active = st.session_state.ph_guardian_name.strip()
-    if _p5_guardian_active:
-        _p5_only_assigned = st.checkbox(
-            f"👩‍🏫 सिर्फ़ '{_p5_guardian_active}' को Assign हुए Students दिखाएँ (P3 → Assign से)",
-            value=True, key="pp_only_assigned_tutor")
-        if _p5_only_assigned:
-            pp_view = pp_view[pp_view["Assigned Tutor"].astype(str).str.strip().str.lower()
-                               == _p5_guardian_active.lower()]
+    if _p5_guardian_active and _p5_pick != _p5_blank_opt:
+        _p5_trow = _p5_opts[_p5_pick]
+        _nk5 = lambda v: re.sub(r"[^a-z0-9]", "", str(v).lower())
+        _cl5 = str(_p5_trow["Department"]).split("\n")
+        _br5 = str(_p5_trow["Branch"]).split("\n")
+        _sl5 = str(_p5_trow["Serial No"]).split("\n")
+        _keep5, _diag5 = [], []
+        for _li5, _c5 in enumerate(_cl5):
+            if not _c5.strip():
+                continue
+            _dg5, _yr5 = parse_allotted_class(_c5)
+            _b5 = _br5[_li5].strip() if _li5 < len(_br5) else ""
+            _rg5 = _p3_parse_ranges(_sl5[_li5] if _li5 < len(_sl5) else "")[0]
+            _cls5 = db
+            if _b5 and _b5 != "ALL" and "Branch" in _cls5.columns:
+                _cls5 = _cls5[_cls5["Branch"].astype(str).str.strip() == _b5]
+            if _dg5 and "Degree" in _cls5.columns:
+                _cls5 = _cls5[_cls5["Degree"].map(_nk5) == _nk5(_dg5)]
+            if _yr5 and "Current Year" in _cls5.columns:
+                _cls5 = _cls5[_cls5["Current Year"].astype(str).map(normalize_course_year).str.strip() == _yr5]
+            _cls5 = _cls5.assign(_k=_cls5["Student Name"].astype(str).str.strip().str.lower()).sort_values("_k", kind="stable")
+            _idx5 = list(_cls5.index)
+            for _a5, _z5 in _rg5:
+                _keep5.extend(_idx5[_a5 - 1:_z5])
+            _diag5.append(f"{_c5.strip()} / Branch: {_b5 or '—'} → P2 में {len(_idx5)} Students, "
+                          f"Serial: {_sl5[_li5].strip() if _li5 < len(_sl5) and _sl5[_li5].strip() else 'खाली'}")
+        pp_view = pp_view[pp_view.index.isin(_keep5)]
+        if not _keep5:
+            st.warning("⚠️ इस Tutor के लिए कोई Student नहीं मिला। P3 में इसकी हर लाइन की स्थिति:  \n"
+                       + "  \n".join(f"• {_d}" for _d in _diag5 or ["P3 में इस Tutor का कोई Allotted Class / Serial नहीं भरा है"])
+                       + "  \n\nजाँचें: P3 → ✏️ Edit में Degree, Branch, Year और FROM/TO SERIAL NO. भरे हों, और P2 की List में वही Degree/Branch/Year हो।")
+        st.caption(f"👩‍🏫 **{_p5_guardian_active}** — P3 में दिए गए Class + SERIAL NO. के Students (नाम के A–Z क्रम में) दिखाए जा रहे हैं।")
 
     st.caption(f"कुल {len(pp_view)} records मिले।")
 
@@ -2061,14 +2087,13 @@ elif choice == "P5 — Print Panel":
     }
 
     if pp_view.empty:
-        st.info("📭 चुने गए Filters से कोई record नहीं मिला।")
+        st.info("📭 कोई record नहीं मिला। अगर Guardian Tutor चुना है, तो P3 में उसका Degree + Branch + Year और FROM–TO SERIAL NO. भरा होना चाहिए।")
         if db.empty:
             st.warning("⚠️ Database बिल्कुल खाली है (कुल 0 records)। पहले P1 से data Upload/Entry करें — "
                        f"या `{DB_FILE}` फ़ाइल app वाले folder में मौजूद नहीं है।")
         else:
             _counts = db["Status"].astype(str).replace("", "(खाली)").value_counts().to_dict()
-            st.caption(f"Database में कुल {len(db)} records हैं। Status-wise: {_counts}. "
-                       "Status को 'सभी' और Department को 'सभी' करके देखें, और Search box खाली रखें।")
+            st.caption(f"Database में कुल {len(db)} records हैं। Status-wise: {_counts}.")
     else:
         default_print_cols = [c for c in ["Unique ID", "Student Name", "Father Name", "Mobile Number"] if c in ALL_COLUMNS]
         pp_cols = st.multiselect(
