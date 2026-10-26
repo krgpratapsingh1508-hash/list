@@ -920,21 +920,27 @@ def show_list(df, height=None, max_rows=1500, **_ignored):
 
 
 def sort_faculty_view(df, mode):
-    """P3 List ko alphabet se lagana. mode: 'name' = Name of Faculty (A-Z); 'dept' = pehle Department (A-Z), fir Name of Faculty (A-Z).
-    Naam ke shuru ke Dr./Mr./Mrs./Prof. jaise title sort me ginte nahi (taaki sab 'Dr.' ek saath na jam jayein). Khaali naam/department sabse neeche.
-    Original index bana rehta hai (Edit/Assign buttons ke liye)."""
-    if df is None or df.empty or mode not in ("name", "dept"):
+    """P3 List ko alphabet se lagana. mode:
+      'name' = Name of Faculty (A-Z), naam ke shuru ka Dr./Mr. waghera ginti me nahi;
+      'dept' = pehle Department (A-Z), fir Name of Faculty (A-Z), Dr./Mr. ginti me nahi;
+      'full' = Dr./Mr. bhi naam ka hissa — jaisa likha hai waisa hi alphabet me (Dr. -> D, Mr. -> M);
+      'dept_full' = pehle Department (A-Z), fir Dr./Mr. samet poora naam (A-Z).
+    Khaali naam/department sabse neeche. Original index bana rehta hai (Edit/Assign buttons ke liye)."""
+    if df is None or df.empty or mode not in ("name", "dept", "full", "dept_full"):
         return df
     _title = re.compile(r"^((dr|mr|mrs|ms|miss|prof|smt|shri|sri|er)\.?\s+)+", re.I)
 
     def _k(v):
-        t = _title.sub("", str(v).strip()).strip().casefold()
+        t = str(v).strip()
+        if mode not in ("full", "dept_full"):
+            t = _title.sub("", t).strip()
+        t = t.casefold()
         return (t == "", t)
 
     d = df.copy()
     d["_nm"] = d["Faculty Name"].map(_k)
     d["_dp"] = d["Tutor Department"].map(lambda v: (str(v).strip() == "", str(v).strip().casefold()))
-    d = d.sort_values(["_dp", "_nm"] if mode == "dept" else ["_nm"], kind="mergesort")
+    d = d.sort_values(["_dp", "_nm"] if mode in ("dept", "dept_full") else ["_nm"], kind="mergesort")
     return d.drop(columns=["_nm", "_dp"])
 
 
@@ -1555,8 +1561,10 @@ elif choice == "P3 — Guardian Tutors List":
     else:
         _sort_labels = {
             "orig": "जैसी List में है",
-            "name": "🔤 Alphabet से — Name of Faculty (A→Z)",
-            "dept": "🔤 पहले Department, फिर Name of Faculty (A→Z)",
+            "name": "Name of Faculty (A→Z)",
+            "dept": "पहले Department, फिर Name of Faculty (A→Z)",
+            "full": "Dr./Mr. समेत पूरे नाम से (A→Z)",
+            "dept_full": "पहले Department, फिर Dr./Mr. समेत Name of Faculty (A→Z)",
         }
         _sort_mode = st.radio("↕️ List कैसे लगाएँ", list(_sort_labels), format_func=lambda k: _sort_labels[k],
                               horizontal=True, key="p3_sort_mode")
