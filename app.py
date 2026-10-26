@@ -2046,6 +2046,7 @@ elif choice == "P5 — Print Panel":
     # FROM-TO SERIAL NO. ke hisaab se Students apne aap aate hain: us Class ke Students ko Name se A-Z karke
     # 1..N Serial milta hai, aur Tutor ke Serial range wale Students hi List me aate hain. ----
     _p5_guardian_active = st.session_state.ph_guardian_name.strip()
+    _serial_map = {}      # {db index: us Student ka P3 wala Serial No. (apni Class ki A-Z list me)}
     if _p5_guardian_active and _p5_pick != _p5_blank_opt:
         _p5_trow = _p5_opts[_p5_pick]
         _nk5 = lambda v: re.sub(r"[^a-z0-9]", "", str(v).lower())
@@ -2064,7 +2065,9 @@ elif choice == "P5 — Print Panel":
             _cls5 = _cls5.assign(_k=_cls5["Student Name"].astype(str).str.strip().str.lower()).sort_values("_k", kind="stable")
             _idx5 = list(_cls5.index)
             for _a5, _z5 in _rg5:
-                _keep5.extend(_idx5[_a5 - 1:_z5])
+                for _n5 in range(_a5, min(_z5, len(_idx5)) + 1):
+                    _keep5.append(_idx5[_n5 - 1])
+                    _serial_map[_idx5[_n5 - 1]] = _n5
             _diag5.append(f"{_c5.strip()} / Branch: {_b5 or '—'} → P2 में {len(_idx5)} Students, "
                           f"Serial: {_s5.strip() or 'खाली'}")
         pp_view = pp_view[pp_view.index.isin(_keep5)]
@@ -2073,6 +2076,9 @@ elif choice == "P5 — Print Panel":
                        + "  \n".join(f"• {_d}" for _d in _diag5 or ["P3 में इस Tutor का कोई Allotted Class / Serial नहीं भरा है"])
                        + "  \n\nजाँचें: P3 → ✏️ Edit में Degree, Branch, Year और FROM/TO SERIAL NO. भरे हों, और P2 की List में वही Degree/Branch/Year हो।")
         st.caption(f"👩‍🏫 **{_p5_guardian_active}** — P3 में दिए गए Class + SERIAL NO. के Students (नाम के A–Z क्रम में) दिखाए जा रहे हैं।")
+
+    pp_view = pp_view.copy()
+    pp_view["_p5_serial"] = [_serial_map.get(_i, 0) for _i in pp_view.index]
 
     st.caption(f"कुल {len(pp_view)} records मिले।")
 
@@ -2130,6 +2136,12 @@ elif choice == "P5 — Print Panel":
             elif _prev_auto and not _p5_all_branch and "Branch" in _cur_cols:
                 st.session_state["pp_cols"] = [c for c in _cur_cols if c != "Branch"]
         st.session_state["pp_branch_auto_prev"] = _p5_all_branch
+        _SNO_SERIAL = "🔢 P3 के Serial No. के अनुसार (जैसे 5, 6, 7 … 10)"
+        _SNO_SEQ = "1, 2, 3 … से शुरू (manual)"
+        _p5_serial_mode = False
+        if _serial_map:
+            _p5_serial_mode = st.radio("S.No कैसे दिखे?", [_SNO_SERIAL, _SNO_SEQ], key="pp_sno_mode",
+                                       horizontal=True) == _SNO_SERIAL
         pp_cols = st.multiselect(
             "Print के लिए Columns चुनें (S.No अपने आप जुड़ जाएगा)", ALL_COLUMNS,
             format_func=lambda c: PRINT_LABEL_OVERRIDES.get(c, c),
@@ -2139,8 +2151,9 @@ elif choice == "P5 — Print Panel":
             # Student Name A→Z (alphabetical) — khaali naam sabse neeche; phir S.No 1,2,3... us order me
             _pp_sorted = pp_view.reset_index(drop=True)
             _name_key = _pp_sorted["Student Name"].astype(str).str.strip().str.lower()
-            _order = pd.DataFrame({"empty": _name_key == "", "name": _name_key}).sort_values(
-                ["empty", "name"], kind="stable").index
+            _order = pd.DataFrame({"empty": _name_key == "", "ser": _pp_sorted["_p5_serial"] if _p5_serial_mode else 0,
+                                   "name": _name_key}).sort_values(["empty", "ser", "name"], kind="stable").index
+            _serial_ordered = _pp_sorted.loc[_order, "_p5_serial"].reset_index(drop=True)
             _raw_print_df = _pp_sorted.loc[_order, pp_cols].reset_index(drop=True)
             _cy_ordered = (
                 _pp_sorted.loc[_order, "Current Year"].astype(str).map(normalize_course_year).reset_index(drop=True)
@@ -2148,7 +2161,7 @@ elif choice == "P5 — Print Panel":
             )
 
             pp_print_df = _raw_print_df.copy()
-            pp_print_df.insert(0, "S.No", range(1, len(pp_print_df) + 1))
+            pp_print_df.insert(0, "S.No", list(_serial_ordered) if _p5_serial_mode else range(1, len(pp_print_df) + 1))
             preview_df = pp_print_df.rename(columns=PRINT_LABEL_OVERRIDES)
 
             # Sirf Print/Preview/Download ke liye — har text column ka 1st letter capital, baaki small
@@ -2198,7 +2211,8 @@ elif choice == "P5 — Print Panel":
                         if _cls_raw.empty:
                             continue
                         _cls_print_df = _cls_raw.copy()
-                        _cls_print_df.insert(0, "S.No", range(1, len(_cls_print_df) + 1))
+                        _cls_print_df.insert(0, "S.No", list(_serial_ordered[_cls_mask]) if _p5_serial_mode
+                                            else range(1, len(_cls_print_df) + 1))
                         _cls_preview = _cls_print_df.rename(columns=PRINT_LABEL_OVERRIDES)
                         for _pcol in _cls_preview.columns:
                             if _pcol == "S.No":
