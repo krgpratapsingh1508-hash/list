@@ -2391,6 +2391,15 @@ elif choice == "P5 — Print Panel":
         st.caption(f"👩‍🏫 **{_p5_guardian_active}** — P3 में दिए गए Class + SERIAL NO. के Students (नाम के A–Z क्रम में) दिखाए जा रहे हैं।")
 
     pp_view = pp_view.copy()
+    # Roll No. khaali ho to Unique ID, wo bhi khaali ho to Admission Application Number (sirf Print/Preview ke liye;
+    # database me asli data nahi badalta)
+    if "Roll No." in pp_view.columns:
+        _roll = pp_view["Roll No."].astype(str).str.strip()
+        for _fb in ("Unique ID", "Admission Application Number"):
+            if _fb in pp_view.columns:
+                _fbv = pp_view[_fb].astype(str).str.strip()
+                _roll = _roll.where(_roll != "", _fbv)
+        pp_view["Roll No."] = _roll
     pp_view["_p5_serial"] = [_serial_map.get(_i, 0) for _i in pp_view.index]
 
     st.caption(f"कुल {len(pp_view)} records मिले।")
@@ -2435,7 +2444,7 @@ elif choice == "P5 — Print Panel":
             _counts = db["Status"].astype(str).replace("", "(खाली)").value_counts().to_dict()
             st.caption(f"Database में कुल {len(db)} records हैं। Status-wise: {_counts}.")
     else:
-        default_print_cols = [c for c in ["Unique ID", "Student Name", "Father Name", "Mobile Number"] if c in ALL_COLUMNS]
+        default_print_cols = [c for c in ["Roll No.", "Student Name", "Father Name", "Mobile Number"] if c in ALL_COLUMNS]
         # Branch ALL wali List ho to aakhri column me "Major Subject" (Student ki Branch) apne aap judta hai;
         # kisi khaas Branch wali List me ye tab tak nahi aata jab tak aap Columns me haath se na jodein
         _p5_all_branch = any(d["b"].strip().upper() == "ALL" for d in st.session_state.get("ph_sel_defs", []))
