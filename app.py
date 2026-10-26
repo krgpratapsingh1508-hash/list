@@ -869,6 +869,27 @@ st.markdown("""
 # 🖨️ PRINT HELPER — button dabate hi browser ka Print dialog khulta hai
 # (sirf diya gaya HTML print hota hai; Streamlit page ka baaki hissa nahi)
 # ==========================================================
+def _is_numlike(text):
+    """Number jaisa (sirf ank / - / . , :) ho to True; koi bhi akshar (English/Hindi) ho to False"""
+    t = re.sub(r"<[^>]+>|&nbsp;|&amp;", " ", str(text)).strip()
+    return bool(t) and not re.search(r"[A-Za-z\u0900-\u097F]", t)
+
+
+def td_aligned(cell_html):
+    """Number wali cell beech me (center), akshar wali cell baayi taraf (left)"""
+    return f'<td style="text-align:{"center" if _is_numlike(cell_html) else "left"};">{cell_html}</td>'
+
+
+def df_to_print_html(df):
+    """DataFrame -> Print table: Header hamesha beech me, Number beech me, Akshar (text) baayi taraf"""
+    import html as _h
+    head = "".join(f'<th style="text-align:center;">{_h.escape(str(c))}</th>' for c in df.columns)
+    rows = []
+    for _, r in df.iterrows():
+        rows.append("<tr>" + "".join(td_aligned(_h.escape(str(v))) for v in r.values) + "</tr>")
+    return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+
+
 def print_button(body_html, label="🖨️ Print करें", height=52):
     doc = (
         '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Print</title><style>'
@@ -1498,14 +1519,15 @@ elif choice == "P3 — Guardian Tutors List":
                     "Serial No.", "Total Number of Students", "⚙️ Actions"]
         _hcols = st.columns(_col_widths)
         for _hc, _htxt in zip(_hcols, _headers):
-            _hc.markdown(f"**{_htxt}**")
+            _hc.markdown(f"<div style='text-align:center; font-weight:700;'>{_htxt}</div>", unsafe_allow_html=True)
         st.markdown("<hr style='margin:2px 0 8px 0;'>", unsafe_allow_html=True)
 
         for _aidx, _arow in _fac.iterrows():
             _mob_disp = _arow["Mobile Number"].strip() or MOBILE_BLANK
             _tot_disp = _p3_total_from_serial(_arow[_p3_serial_col]) or _arow[_p3_total_col] or "—"
             _rc = st.columns(_col_widths)
-            _rc[0].write(_aidx + 1)
+            _ctr = lambda v: f"<div style='text-align:center;'>{v}</div>"      # Number hamesha beech me
+            _rc[0].markdown(_ctr(_aidx + 1), unsafe_allow_html=True)
             # Degree aur Year — Allotted Class text (jaise "PGDCA I Year") se alag-alag nikalte hain, har line ke liye
             _deg_lines, _yr_lines = [], []
             for _cl in str(_arow[_p3_class_col]).split("\n"):
@@ -1515,12 +1537,12 @@ elif choice == "P3 — Guardian Tutors List":
                     _yr_lines.append(_yr or "—")
             _rc[1].write(_arow["Faculty Name"].strip() or "(बिना नाम)")
             _rc[2].write(_arow["Tutor Department"].strip() or "—")
-            _rc[3].write(_mob_disp)
+            _rc[3].markdown(_ctr(_mob_disp), unsafe_allow_html=True)
             _rc[4].markdown("  \n".join(_deg_lines) or "—")
             _rc[5].markdown(str(_arow[_p3_branch_col]).replace("\n", "  \n") or "—")
             _rc[6].markdown("  \n".join(_yr_lines) or "—")
-            _rc[7].markdown((_arow[_p3_serial_col].replace("\n", "  \n") or "—"))
-            _rc[8].write(_tot_disp)
+            _rc[7].markdown(_ctr((_arow[_p3_serial_col].replace("\n", "<br>") or "—")), unsafe_allow_html=True)
+            _rc[8].markdown(_ctr(_tot_disp), unsafe_allow_html=True)
             with _rc[9]:
                 _ea1, _ea2 = st.columns(2)
                 with _ea1:
@@ -1552,12 +1574,12 @@ elif choice == "P3 — Guardian Tutors List":
             _tot = _p3_total_from_serial(_pr[_p3_serial_col]) or str(_pr[_p3_total_col]).strip()
             _ml = lambda v: "<br>".join(_html.escape(x.strip()) for x in str(v).split("\n"))
             _pr_rows.append(
-                "<tr>" + "".join(f"<td>{c}</td>" for c in [
+                "<tr>" + "".join(td_aligned(c) for c in [
                     _pi + 1, _html.escape(str(_pr["Faculty Name"]).strip()), _html.escape(str(_pr["Tutor Department"]).strip()),
                     _html.escape(_mob) or MOBILE_BLANK, "<br>".join(_html.escape(x) for x in _dg_l),
                     _ml(_pr[_p3_branch_col]), "<br>".join(_html.escape(x) for x in _yr_l),
                     _ml(_pr[_p3_serial_col]), _html.escape(_tot)]) + "</tr>")
-        _pr_head = "".join(f"<th>{h}</th>" for h in ["S.No.", "Name of Faculty", "Department", "Mobile No.", "Degree",
+        _pr_head = "".join(f'<th style="text-align:center;">{h}</th>' for h in ["S.No.", "Name of Faculty", "Department", "Mobile No.", "Degree",
                                                        "Major Subject" if _p3_subj_type == "Major Subject" else "Branch",
                                                        "Year", "Serial No.", "Total Number of Students"])
         _pr_title = _html.escape(st.session_state.get("ph_line1", "") or "")
@@ -2525,10 +2547,10 @@ elif choice == "P5 — Print Panel":
                         _cls_hdr = (f'<div style="margin-bottom:10px; margin-top:18px;">'
                                     f'{_build_header_html("Arial, sans-serif", line2_override=_cls_line2)}'
                                     f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
-                        _sections.append(_cls_hdr + _cls_preview.to_html(index=False, escape=True))
+                        _sections.append(_cls_hdr + df_to_print_html(_cls_preview))
                     print_button("".join(_sections), label="🖨️ Print करें (हर Class अलग से)")
                 else:
-                    _table_html = preview_df.to_html(index=False, escape=True)
+                    _table_html = df_to_print_html(preview_df)
                     _hdr = (f'<div style="margin-bottom:10px;">{_build_header_html("Arial, sans-serif")}'
                             f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
                     print_button(_hdr + _table_html, label="🖨️ Print करें")
