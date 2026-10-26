@@ -47,7 +47,6 @@ MOBILE_BLANK = "_" * 14
 # P1 me har upload ke saath chuna jaata hai ki wo kin panels me dikhe (P1/P6 hamesha admin ke liye hain)
 PANEL_OPTIONS = {
     "P2": "P2 — List",
-    "P4": "P4 — Department Panel",
     "P5": "P5 — Print Panel",
 }
 
@@ -1225,19 +1224,23 @@ with st.sidebar:
             "P1 — Entry & Upload",
             "P2 — List",
             "P3 — Guardian Tutors List",
-            "P4 — Department Panel",
             "P5 — Print Panel",
             "P6 — Admin Panel",
         ]
     else:
-        panel_options = ["P4 — My Department List"]
-    choice = st.radio("Navigate Panels", panel_options, label_visibility="visible")
+        panel_options = []
+        st.info("इस User के लिए कोई Panel उपलब्ध नहीं है। Admin से संपर्क करें।")
+    choice = st.radio("Navigate Panels", panel_options, label_visibility="visible") if panel_options else None
     st.markdown("---")
     if st.button("🚪 Logout", use_container_width=True):
         st.session_state.user_role = None
         st.session_state.username = None
         st.session_state.user_department = None
         st.rerun()
+
+if role != "admin":
+    st.warning("⚠️ इस User के लिए कोई Panel उपलब्ध नहीं है। कृपया Logout करके Admin से संपर्क करें।")
+    st.stop()
 
 db = load_db()
 
@@ -1256,10 +1259,7 @@ if choice == "P1 — Entry & Upload":
             "यह Entry किन Panels में दिखे?", list(PANEL_OPTIONS.keys()), default=list(PANEL_OPTIONS.keys()),
             format_func=lambda k: PANEL_OPTIONS[k], key="p1_single_panels",
         )
-        if "P4" in p1_single_panels:
-            p1_single_dept = st.selectbox("P4 के लिए Department (Approve होकर यहीं भेजी जाएगी)", st.session_state.departments, key="p1_single_dept")
-        else:
-            p1_single_dept = ""
+        p1_single_dept = ""      # P4 hata diya gaya — ab Department chunne ki zaroorat nahi
         with st.form("single_entry_form"):
             st.caption("नीचे जितने columns भरने हैं भरें — बाकी खाली छोड़ सकते हैं।")
             values = {}
@@ -1330,10 +1330,7 @@ if choice == "P1 — Entry & Upload":
                    "Admission Session सिर्फ़ उन्हीं rows में भरा जाएगा जहाँ फ़ाइल में वह कॉलम पहले से खाली है।")
         if not p1_bulk_panels:
             st.warning("⚠️ कम से कम एक Panel चुनें, तभी List जोड़ी जा सकेगी।")
-        if "P4" in p1_bulk_panels:
-            p1_bulk_dept = st.selectbox("P4 के लिए Department (सभी rows Approve होकर यहीं जाएंगी)", st.session_state.departments, key="p1_bulk_dept")
-        else:
-            p1_bulk_dept = ""
+        p1_bulk_dept = ""        # P4 hata diya gaya — ab Department chunne ki zaroorat nahi
 
         up_files = st.file_uploader("फ़ाइलें चुनें", type=["csv", "xlsx", "xls"], accept_multiple_files=True,
                                     key=f"p1_bulk_up_{st.session_state.get('p1_bulk_up_n', 0)}")
@@ -1462,8 +1459,7 @@ elif choice == "P3 — Guardian Tutors List":
 
     st.caption("यहाँ से आप Text बदल सकते हैं, नई Row जोड़ सकते हैं (टेबल के नीचे ➕) और Row हटा सकते हैं "
                "(Row चुनकर 🗑️)। बदलाव के बाद **💾 Save Changes** ज़रूर दबाएँ। "
-               "**Major Subject** के Allotted Class का नाम वही रखें जो P4 में Department का नाम है, ताकि P4 में यह Tutor सही जगह दिखे "
-               "(Minor/Vocational/MDC/PW-Ap-CE ke Allotted Class par ye restriction lagu nahi hoti)।")
+               "Degree, Branch और Year P2 की List से चुने जाते हैं, और FROM/TO SERIAL NO. से तय होता है कि Tutor को कौन से Students मिलेंगे।")
     if _fac.empty:
         st.info("📭 अभी List खाली है — ऊपर से फ़ाइल अपलोड करें, या नीचे टेबल में ➕ से Row जोड़ें।")
 
@@ -2069,53 +2065,6 @@ elif choice == "P3 — Guardian Tutors List":
 
 
 # ==========================================================
-# 🏢 P4 — DEPARTMENT PANEL
-# ==========================================================
-elif choice in ("P4 — Department Panel", "P4 — My Department List"):
-    st.header("🏢 P4 — Department-wise List")
-    _p4_rows = filter_for_panel(db, "P4")
-    approved = _p4_rows[_p4_rows["Status"] == "Approved"].copy()
-    faculty_db = load_faculty()
-
-    if role == "admin":
-        with st.expander("📤 Department – Faculty Mapping अपलोड/अपडेट करें"):
-            faculty_upload_ui("p4")
-
-            if not faculty_db.empty:
-                st.markdown("**मौजूदा Faculty Mapping:**")
-                st.dataframe(faculty_db, use_container_width=True, hide_index=True)
-
-    if role == "admin":
-        target_dept = st.selectbox("Department चुनें", st.session_state.departments)
-    else:
-        target_dept = user_dept
-        st.caption(f"आप लॉगिन हैं: **{target_dept}** — आपको सिर्फ़ इसी Department को Assign की गई entries दिखेंगी।")
-
-    dept_faculty = faculty_db[(faculty_db["Tutor Department"] == target_dept) | (faculty_db["Department"] == target_dept)]
-    if not dept_faculty.empty:
-        for _, frow in dept_faculty.iterrows():
-            line = f"👩‍🏫 **{frow['Faculty Name']}**"
-            if str(frow.get("Designation", "")).strip():
-                line += f" ({frow['Designation']})"
-            if str(frow.get("Mobile Number", "")).strip():
-                line += f" — 📱 {frow['Mobile Number']}"
-            if str(frow.get("Number of Students", "")).strip():
-                line += f" — 👥 {frow['Number of Students']} Students"
-            st.info(line)
-    else:
-        st.caption("ℹ️ इस Department के लिए अभी कोई Faculty mapping उपलब्ध नहीं है (ऊपर 'Department – Faculty Mapping' से अपलोड करें)।")
-
-    dept_view = approved[approved["Assigned Department"] == target_dept]
-    st.subheader(f"📂 {target_dept} — कुल {len(dept_view)} Students")
-    if dept_view.empty:
-        st.info("📭 इस Department को अभी तक कोई entry Assign नहीं हुई है।")
-    else:
-        st.dataframe(dept_view, use_container_width=True, hide_index=True)
-        st.download_button(f"⬇️ {target_dept} की List Download करें",
-                            dept_view.to_csv(index=False).encode("utf-8-sig"),
-                            file_name=f"{target_dept.replace(' ', '_')}_list.csv", mime="text/csv")
-
-# ==========================================================
 # 🖨️ P5 — PRINT PANEL  (Admin only)
 # ==========================================================
 elif choice == "P5 — Print Panel":
@@ -2647,34 +2596,6 @@ elif choice == "P6 — Admin Panel":
             for u, v in creds.items()
         ])
         st.dataframe(users_table, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-        st.markdown("**➕ नया Department User बनाएँ**")
-        with st.form("new_user_form"):
-            nu_col1, nu_col2 = st.columns(2)
-            with nu_col1:
-                new_username = st.text_input("Username")
-                new_password = st.text_input("Password")
-            with nu_col2:
-                new_dept = st.selectbox("Department", st.session_state.departments)
-                new_label = st.text_input("Display Label (optional)", value="")
-            add_user_btn = st.form_submit_button("➕ User जोड़ें", type="primary")
-        if add_user_btn:
-            if not new_username.strip() or not new_password.strip():
-                st.warning("⚠️ Username और Password दोनों भरना ज़रूरी है।")
-            elif new_username.strip() in creds:
-                st.error("❌ यह Username पहले से मौजूद है।")
-            else:
-                creds[new_username.strip()] = {
-                    "password": new_password,
-                    "role": "department",
-                    "department": new_dept,
-                    "label": new_label.strip() or f"🏢 {new_dept}",
-                }
-                st.session_state.credentials = creds
-                save_credentials(creds)
-                st.success(f"✅ User '{new_username.strip()}' बन गया — यह सिर्फ़ '{new_dept}' का P4 देख पाएगा।")
-                st.rerun()
 
         st.markdown("---")
         st.markdown("**🗑️ User हटाएँ**")
