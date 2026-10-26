@@ -2393,13 +2393,18 @@ elif choice == "P5 — Print Panel":
     pp_view = pp_view.copy()
     # Roll No. khaali ho to Unique ID, wo bhi khaali ho to Admission Application Number (sirf Print/Preview ke liye;
     # database me asli data nahi badalta)
+    _roll_label = "Roll No."      # Column ka naam bhi usi hisaab se badalta hai ki data kahan se aaya
     if "Roll No." in pp_view.columns:
         _roll = pp_view["Roll No."].astype(str).str.strip()
-        for _fb in ("Unique ID", "Admission Application Number"):
+        _roll_used = ["Roll No."] if (_roll != "").any() else []
+        for _fb, _fb_lbl in (("Unique ID", "Unique Id"), ("Admission Application Number", "Admission Application Number")):
             if _fb in pp_view.columns:
                 _fbv = pp_view[_fb].astype(str).str.strip()
+                if ((_roll == "") & (_fbv != "")).any():
+                    _roll_used.append(_fb_lbl)
                 _roll = _roll.where(_roll != "", _fbv)
         pp_view["Roll No."] = _roll
+        _roll_label = " / ".join(_roll_used) or "Roll No."
     pp_view["_p5_serial"] = [_serial_map.get(_i, 0) for _i in pp_view.index]
 
     st.caption(f"कुल {len(pp_view)} records मिले।")
@@ -2433,6 +2438,7 @@ elif choice == "P5 — Print Panel":
         "Father Name": "Father Name",
         "Mobile Number": "Mob. No.",
         "Branch": "Major Subject",
+        "Roll No.": _roll_label,
     }
 
     if pp_view.empty:
