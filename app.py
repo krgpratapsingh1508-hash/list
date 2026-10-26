@@ -1043,6 +1043,41 @@ def rename_department(old, new):
 
 
 # ==========================================================
+# 🖼️ LOGO — app.py wale folder me (ya uske assets/images/static folder me) jis image file ke naam me "logo" ya "pratap"
+# likha ho (jaise "logo pratap.png"), wahi Login panel par dikhta hai
+# ==========================================================
+def find_logo_data_uri():
+    import base64
+    exts = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+            ".gif": "image/gif", ".svg": "image/svg+xml"}
+    try:
+        base = os.path.dirname(os.path.abspath(__file__))
+    except Exception:
+        base = os.getcwd()
+    folders = []
+    for root in dict.fromkeys([base, os.getcwd()]):
+        folders.append(root)
+        folders += [os.path.join(root, sub) for sub in ("assets", "images", "image", "static", "logo", "logos")]
+    cands = []
+    for d in folders:
+        if not os.path.isdir(d):
+            continue
+        for n in os.listdir(d):
+            low = n.lower()
+            ext = os.path.splitext(low)[1]
+            if ext in exts and ("logo" in low or "pratap" in low):
+                score = 0 if ("logo" in low and "pratap" in low) else (1 if "logo" in low else 2)
+                cands.append((score, os.path.join(d, n), exts[ext]))
+    for _, path, mime in sorted(cands):
+        try:
+            with open(path, "rb") as f:
+                return f"data:{mime};base64," + base64.b64encode(f.read()).decode()
+        except Exception:
+            continue
+    return ""
+
+
+# ==========================================================
 # 🛑 STEP 4: LOGIN GATEWAY
 # ==========================================================
 if st.session_state.user_role is None:
@@ -1061,6 +1096,12 @@ if st.session_state.user_role is None:
         </div>
     </div>
     """
+    _logo_uri = find_logo_data_uri()
+    if _logo_uri:
+        header_html = header_html.replace(
+            '<h1 style="margin:0;">🏛️</h1>',
+            f'<img src="{_logo_uri}" alt="Logo" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:8px;">'
+        ).replace("flex-shrink:0; width:70px; height:70px;", "flex-shrink:0; width:92px; height:92px; background:#fff; padding:4px;")
     st.markdown(header_html, unsafe_allow_html=True)
 
     login_col, _ = st.columns([1, 1.4])
