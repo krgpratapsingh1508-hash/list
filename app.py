@@ -919,6 +919,25 @@ def show_list(df, height=None, max_rows=1500, **_ignored):
         st.caption(f"⚠️ सिर्फ़ पहली {max_rows} rows दिख रही हैं (कुल {_total}) — पूरी List के लिए Download/Search/Filter इस्तेमाल करें।")
 
 
+def sort_faculty_view(df, mode):
+    """P3 List ko alphabet se lagana. mode: 'name' = Name of Faculty (A-Z); 'dept' = pehle Department (A-Z), fir Name of Faculty (A-Z).
+    Naam ke shuru ke Dr./Mr./Mrs./Prof. jaise title sort me ginte nahi (taaki sab 'Dr.' ek saath na jam jayein). Khaali naam/department sabse neeche.
+    Original index bana rehta hai (Edit/Assign buttons ke liye)."""
+    if df is None or df.empty or mode not in ("name", "dept"):
+        return df
+    _title = re.compile(r"^((dr|mr|mrs|ms|miss|prof|smt|shri|sri|er)\.?\s+)+", re.I)
+
+    def _k(v):
+        t = _title.sub("", str(v).strip()).strip().casefold()
+        return (t == "", t)
+
+    d = df.copy()
+    d["_nm"] = d["Faculty Name"].map(_k)
+    d["_dp"] = d["Tutor Department"].map(lambda v: (str(v).strip() == "", str(v).strip().casefold()))
+    d = d.sort_values(["_dp", "_nm"] if mode == "dept" else ["_nm"], kind="mergesort")
+    return d.drop(columns=["_nm", "_dp"])
+
+
 def print_button(body_html, label="🖨️ Print करें", height=52):
     doc = (
         '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Print</title><style>'
@@ -1534,6 +1553,14 @@ elif choice == "P3 — Guardian Tutors List":
     if _fac.empty:
         st.info("📭 अभी List खाली है — ऊपर से फ़ाइल अपलोड करें, या नीचे ➕ से नया Tutor जोड़ें।")
     else:
+        _sort_labels = {
+            "orig": "जैसी List में है",
+            "name": "🔤 Alphabet से — Name of Faculty (A→Z)",
+            "dept": "🔤 पहले Department, फिर Name of Faculty (A→Z)",
+        }
+        _sort_mode = st.radio("↕️ List कैसे लगाएँ", list(_sort_labels), format_func=lambda k: _sort_labels[k],
+                              horizontal=True, key="p3_sort_mode")
+        _fac_view = sort_faculty_view(_fac, _sort_mode)   # index wahi rehta hai, isliye Edit/Assign sahi Tutor par chalte hain
         _col_widths = [0.5, 2.0, 1.3, 1.2, 1.0, 1.3, 1.0, 1.1, 1.1, 1.2]
         _headers = ["S.No.", "Name of Faculty", "Department", "Mobile No.", "Degree", "Branch", "Year",
                     "Serial No.", "Total Number of Students", "⚙️ Actions"]
@@ -1542,12 +1569,12 @@ elif choice == "P3 — Guardian Tutors List":
             _hc.markdown(f"<div style='text-align:center; font-weight:700;'>{_htxt}</div>", unsafe_allow_html=True)
         st.markdown("<hr style='margin:2px 0 8px 0;'>", unsafe_allow_html=True)
 
-        for _aidx, _arow in _fac.iterrows():
+        for _sn, (_aidx, _arow) in enumerate(_fac_view.iterrows(), start=1):
             _mob_disp = _arow["Mobile Number"].strip() or MOBILE_BLANK
             _tot_disp = _p3_total_from_serial(_arow[_p3_serial_col]) or _arow[_p3_total_col] or "—"
             _rc = st.columns(_col_widths)
             _ctr = lambda v: f"<div style='text-align:center;'>{v}</div>"      # Number hamesha beech me
-            _rc[0].markdown(_ctr(_aidx + 1), unsafe_allow_html=True)
+            _rc[0].markdown(_ctr(_sn), unsafe_allow_html=True)
             # Degree aur Year — Allotted Class text (jaise "PGDCA I Year") se alag-alag nikalte hain, har line ke liye
             _deg_lines, _yr_lines = [], []
             for _cl in str(_arow[_p3_class_col]).split("\n"):
@@ -1577,13 +1604,13 @@ elif choice == "P3 — Guardian Tutors List":
                         st.rerun()
             st.markdown("<hr style='margin:2px 0 8px 0;'>", unsafe_allow_html=True)
 
-        _dl = _fac.reset_index(drop=True).copy()
+        _dl = _fac_view.reset_index(drop=True).copy()
         _dl.insert(0, "S.N.", range(1, len(_dl) + 1))
         _dl["Mobile Number"] = _dl["Mobile Number"].map(lambda v: "" if str(v).strip("_ ").strip() == "" else v)
         # ---- 🖨️ Print: P3 ki List ko seedha browser Print dialog se print karna ----
         import html as _html
         _pr_rows = []
-        for _pi, _pr in _fac.reset_index(drop=True).iterrows():
+        for _pi, _pr in _fac_view.reset_index(drop=True).iterrows():
             _dg_l, _yr_l = [], []
             for _cl in str(_pr[_p3_class_col]).split("\n"):
                 if _cl.strip():
