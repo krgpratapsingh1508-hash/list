@@ -909,6 +909,74 @@ def print_button(body_html, label="🖨️ Print करें", height=52):
 
 
 # ==========================================================
+# 📗 EXCEL (.xlsx) BANANE KA HELPER — P3 ke "Upload Format (Template)" aur "Backup Export" ke liye
+# Header rang-bira, text wrap, sahi column width, borders, freeze row, filter; sab cells TEXT format me
+# (taaki Excel "1-10" ko date ya mobile number ko 9.1E+09 na bana de) aur wapas Upload karne par data jaisa ka taisa aaye.
+# ==========================================================
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def df_to_formatted_xlsx(df, sheet_name="Sheet1", header_notes=None, highlight_rows=0, group_colors=None):
+    """df (sab text) -> sundar formatted .xlsx bytes.
+    header_notes: {column: help text} — header par Excel Note (hover karne par dikhta hai)
+    highlight_rows: shuru ki itni rows halke peele rang me (Sample rows — hatane ke liye)
+    group_colors: [(column_prefix_ya_naam_ka_tuple, hex_color)] — header ka rang group ke hisaab se"""
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.comments import Comment
+    from openpyxl.utils import get_column_letter
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as xw:
+        df.astype(str).to_excel(xw, index=False, sheet_name=sheet_name[:31])
+        ws = xw.sheets[sheet_name[:31]]
+        thin = Side(style="thin", color="B8C4D6")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        default_hdr = "0F2A4A"
+        n_cols = len(df.columns)
+        for ci, col in enumerate(df.columns, start=1):
+            color = default_hdr
+            for keys, hexc in (group_colors or []):
+                if col in keys:
+                    color = hexc
+                    break
+            c = ws.cell(row=1, column=ci)
+            c.fill = PatternFill("solid", fgColor=color)
+            c.font = Font(bold=True, color="FFFFFF", size=11, name="Calibri")
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border = border
+            if header_notes and col in header_notes:
+                note = Comment(header_notes[col], "Guardian Tutors")
+                note.width, note.height = 280, 110
+                c.comment = note
+            # column width: sabse lambi line ke hisaab se
+            longest = max([len(str(col))] + [len(line) for v in df[col].astype(str) for line in v.split("\n")] or [8])
+            ws.column_dimensions[get_column_letter(ci)].width = max(11, min(longest + 3, 42))
+        ws.row_dimensions[1].height = 34
+        for ri in range(2, len(df) + 2):
+            fill = None
+            if highlight_rows and ri - 1 <= highlight_rows:
+                fill = PatternFill("solid", fgColor="FFF6D6")
+            elif ri % 2 == 1:
+                fill = PatternFill("solid", fgColor="F4F7FB")
+            max_lines = 1
+            for ci in range(1, n_cols + 1):
+                c = ws.cell(row=ri, column=ci)
+                c.number_format = "@"
+                c.alignment = Alignment(vertical="center", wrap_text=True)
+                c.font = Font(name="Calibri", size=11)
+                c.border = border
+                if fill:
+                    c.fill = fill
+                max_lines = max(max_lines, str(c.value or "").count("\n") + 1)
+            ws.row_dimensions[ri].height = max(22, 17 * max_lines + 4)
+        ws.freeze_panes = "A2"
+        if n_cols:
+            ws.auto_filter.ref = f"A1:{get_column_letter(n_cols)}{len(df) + 1}"
+        ws.sheet_view.zoomScale = 100
+    return buf.getvalue()
+
+
+# ==========================================================
 # 👩‍🏫 GUARDIAN TUTORS LIST UPLOAD (P3 aur P4 dono me use hota hai)
 # ==========================================================
 def faculty_upload_ui(key_prefix):
@@ -924,9 +992,21 @@ def faculty_upload_ui(key_prefix):
          "Degree": "PGDCA\nPGDCA", "Branch": "Computer Science\nComputer Science", "Year": "1st Year\n2nd Year",
          "Serial No": "11-20\n1-5", "Total Number of Students": "15"},
     ])
+    _tpl_notes = {
+        "S.No.": "क्रम संख्या (वैकल्पिक)।",
+        "Name of Faculty": "Guardian Tutor का नाम।",
+        "Department": "Tutor का Department (जैसे Commerce)।",
+        "Mobile No.": "Tutor का मोबाइल नंबर (वैकल्पिक)।",
+        "Degree": "Degree/Course (जैसे B.Com., PGDCA)। एक से ज़्यादा Class हों तो हर Class नई लाइन (Alt+Enter) पर लिखें।",
+        "Branch": "Branch / Major Subject (जैसे Commerce) — या सभी Branch के लिए ALL। Degree की हर लाइन के सामने की लाइन में।",
+        "Year": "1st Year / 2nd Year / 3rd Year … हर Class के लिए नई लाइन (Alt+Enter) पर।",
+        "Serial No": "यहाँ से-यहाँ तक, जैसे 1-10। हर Class का Serial उसी क्रम की नई लाइन पर।",
+        "Total Number of Students": "वैकल्पिक — Save करने पर Serial No से अपने आप निकल आता है।",
+    }
     st.download_button(
-        "📥 Upload Format (Template) Download करें", _tpl.to_csv(index=False).encode("utf-8-sig"),
-        file_name="guardian_tutors_upload_format.csv", mime="text/csv", key=f"{key_prefix}_fac_tpl_dl",
+        "📥 Upload Format (Template) Download करें",
+        df_to_formatted_xlsx(_tpl, sheet_name="Guardian Tutors", header_notes=_tpl_notes, highlight_rows=len(_tpl)),
+        file_name="guardian_tutors_upload_format.xlsx", mime=XLSX_MIME, key=f"{key_prefix}_fac_tpl_dl",
         help="इस फ़ाइल में दिए columns वैसे ही रखें, Sample rows हटाकर अपना data भरें, फिर नीचे Upload करें। "
              "एक Tutor की एक से ज़्यादा Class हों तो Allotted Class और Serial No में हर Class नई लाइन (Excel में Alt+Enter) पर लिखें।")
     st.caption("ℹ️ Template में 2 Sample rows हैं (दूसरी row में एक Tutor की 2 Class दिखाई गई हैं) — इन्हें हटाकर अपना data भरें। "
@@ -1501,9 +1581,18 @@ elif choice == "P3 — Guardian Tutors List":
             # Backup Export: app ke saare columns (sabhi Subject Types ka Class + SERIAL NO. samet), bina kisi badlaav ke.
             # Isi file ko upar "📤 फ़ाइल से List अपलोड करें" me dobara upload karke List waisi hi wapas laayi ja sakti hai.
             _bk = load_faculty().reset_index(drop=True)[FACULTY_COLUMNS]
-            st.download_button("💾 Backup Export (दोबारा Upload करने के लिए)", _bk.to_csv(index=False).encode("utf-8-sig"),
-                               file_name=f"guardian_tutors_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                               mime="text/csv", use_container_width=True, type="primary",
+            _bk_groups = [
+                (("Department", "Faculty Name", "Designation", "Mobile Number", "Number of Students", "Tutor Department",
+                  "Serial No", "Branch"), "0F2A4A"),
+                (("Minor Class", "Minor Serial No", "Minor Number of Students", "Minor Branch"), "1B6B7A"),
+                (("Vocational Class", "Vocational Serial No", "Vocational Number of Students", "Vocational Branch"), "6B3FA0"),
+                (("MDC Class", "MDC Serial No", "MDC Number of Students", "MDC Branch"), "2E7D32"),
+                (("PWApCE Class", "PWApCE Serial No", "PWApCE Number of Students", "PWApCE Branch"), "8A5A14"),
+            ]
+            st.download_button("💾 Backup Export (दोबारा Upload करने के लिए)",
+                               df_to_formatted_xlsx(_bk, sheet_name="Guardian Tutors Backup", group_colors=_bk_groups),
+                               file_name=f"guardian_tutors_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                               mime=XLSX_MIME, use_container_width=True, type="primary",
                                help="इस फ़ाइल को बाद में P3 → '📤 फ़ाइल से List अपलोड करें' में डालने पर पूरी List (सभी Subject Types समेत) वापस आ जाएगी।")
 
     # Degree -> Branch -> Year: teeno dropdown P2 ki List (database) se aate hain aur ek doosre par depend karte hain —
