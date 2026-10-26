@@ -1054,6 +1054,101 @@ def df_to_formatted_xlsx(df, sheet_name="Sheet1", header_notes=None, highlight_r
     return buf.getvalue()
 
 
+def header_sections_to_xlsx(sections, line1, line3, guardian, mobile, styles, sheet_name="Print List"):
+    """P5 ka Print jaisa Excel: upar College / Course-Session / List Title / Guardian Tutor + Mobile ka Header,
+    uske neeche Table. sections = [(line2_text, df), ...] — ek se zyada Class ho to har Class ke liye Header dobara.
+    styles = {1: (size_px, '#hex'), 2: (...), 3: (...)}"""
+    import math
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.pagebreak import Break
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name[:31]
+    thin = Side(style="thin", color="111111")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    ncols = max(len(d.columns) for _, d in sections) if sections else 1
+    ncols = max(ncols, 2)
+
+    # Column width: sabhi sections ke data ke hisaab se
+    widths = [8] * ncols
+    for _, d in sections:
+        for ci, col in enumerate(d.columns):
+            longest = max([len(str(col))] + [len(str(v)) for v in d[col].astype(str)] or [8])
+            widths[ci] = max(widths[ci], min(longest + 3, 40))
+    for ci, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(ci)].width = max(10, w)
+    total_w = sum(widths)
+    last = get_column_letter(ncols)
+
+    def _pt(px):
+        return round(float(px) * 0.75, 1)
+
+    def _hex(c):
+        return str(c).lstrip("#").upper() or "000000"
+
+    def _lines(text, size_px):
+        chars_per_line = max(10, total_w * 1.15 * (14.0 / max(8, float(size_px))))
+        return sum(max(1, math.ceil(len(part) / chars_per_line)) for part in str(text).split("\n"))
+
+    r = 1
+    for si, (line2, d) in enumerate(sections):
+        if si > 0:
+            ws.row_breaks.append(Break(id=r - 1))
+        for text, key in ((line1, 1), (line2, 2), (line3, 3)):
+            size, color = styles[key]
+            ws.merge_cells(f"A{r}:{last}{r}")
+            c = ws.cell(row=r, column=1, value=str(text or ""))
+            c.font = Font(name="Calibri", bold=True, size=_pt(size), color=_hex(color))
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            ws.row_dimensions[r].height = max(22, _lines(text, size) * _pt(size) * 1.35 + 6)
+            r += 1
+        # Guardian Tutor (baayi taraf) aur Mobile (daayi taraf)
+        split = max(1, ncols // 2) if ncols > 2 else 1
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=split)
+        ws.merge_cells(start_row=r, start_column=split + 1, end_row=r, end_column=ncols)
+        g = ws.cell(row=r, column=1, value=f"Name of Guardian Tutor - {guardian}" if guardian else "Name of Guardian Tutor - ")
+        m = ws.cell(row=r, column=split + 1, value=f"Mobile No- {mobile}")
+        g.font = m.font = Font(name="Calibri", bold=True, size=11)
+        g.alignment = Alignment(horizontal="left", vertical="center")
+        m.alignment = Alignment(horizontal="right", vertical="center")
+        ws.row_dimensions[r].height = 24
+        r += 2
+        # Table header
+        for ci, col in enumerate(d.columns, start=1):
+            c = ws.cell(row=r, column=ci, value=str(col))
+            c.font = Font(name="Calibri", bold=True, size=11)
+            c.fill = PatternFill("solid", fgColor="F2F2F2")
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border = border
+        ws.row_dimensions[r].height = 24
+        r += 1
+        for row in d.astype(str).values.tolist():
+            for ci, v in enumerate(row, start=1):
+                c = ws.cell(row=r, column=ci, value=v)
+                c.number_format = "@"
+                c.font = Font(name="Calibri", size=11)
+                c.border = border
+                numlike = bool(v.strip()) and not re.search(r"[A-Za-z\u0900-\u097F]", v)
+                c.alignment = Alignment(horizontal="center" if numlike else "left", vertical="center", wrap_text=True)
+            ws.row_dimensions[r].height = 20
+            r += 1
+        r += 2
+
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.page_margins.left = ws.page_margins.right = 0.3
+    ws.page_margins.top = ws.page_margins.bottom = 0.3
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 # ==========================================================
 # 👩‍🏫 GUARDIAN TUTORS LIST UPLOAD (P3 aur P4 dono me use hota hai)
 # ==========================================================
@@ -2625,10 +2720,45 @@ elif choice == "P5 — Print Panel":
 
             st.markdown("---")
             st.subheader("🖨️ Print / Export")
+            # ---- Excel: Print jaisa Header (College / Course-Session / List Title / Tutor + Mobile) upar, Table neeche ----
+            _xl_allotted = st.session_state.get("ph_allotted_lines") or []
+            if _xl_allotted:
+                _xl_line2 = "\n".join(_xl_allotted) + (f"\n{_sess_txt}" if _sess_txt else "")
+            else:
+                _xl_line2 = st.session_state.ph_line2
+            _xl_sections = []
+            if len(_p5_classes_present) > 1:
+                for _cls_val in _p5_classes_present:
+                    _m = (_cy_ordered == _cls_val).values
+                    _d = _raw_print_df[_m].reset_index(drop=True)
+                    if _d.empty:
+                        continue
+                    _d.insert(0, "S.No", list(_serial_ordered[_m]) if _p5_serial_mode else range(1, len(_d) + 1))
+                    _d = _d.rename(columns=PRINT_LABEL_OVERRIDES)
+                    for _pc in _d.columns:
+                        if _pc != "S.No":
+                            _d[_pc] = _d[_pc].map(_p5_name_case)
+                    _lbl = COURSE_YEAR_PRINT_LABELS.get(_cls_val, _cls_val.upper())
+                    _l2 = (f"{_course_txt} {_lbl} ({_sess_txt})" if _course_txt and _sess_txt
+                           else (f"{_lbl} ({_sess_txt})" if _sess_txt else f"{_course_txt} {_lbl}".strip()))
+                    _xl_sections.append((_l2, _d))
+            else:
+                _xl_sections.append((_xl_line2, preview_df))
+            _xl_bytes = header_sections_to_xlsx(
+                _xl_sections, st.session_state.ph_line1, st.session_state.ph_line3,
+                st.session_state.ph_guardian_name.strip(),
+                st.session_state.ph_guardian_mobile.strip() or MOBILE_BLANK,
+                {1: (st.session_state.ph_size1, st.session_state.ph_color1),
+                 2: (st.session_state.ph_size2, st.session_state.ph_color2),
+                 3: (st.session_state.ph_size3, st.session_state.ph_color3)})
             pr_col1, pr_col2 = st.columns(2)
             with pr_col1:
                 st.download_button(
-                    "⬇️ CSV Download करें",
+                    "📗 Excel Download करें (Header के साथ)", _xl_bytes,
+                    file_name="print_panel_list.xlsx", mime=XLSX_MIME, use_container_width=True, key="p5_xlsx_dl",
+                    help="Print जैसा Header ऊपर और Table नीचे — Excel में खोलकर वैसा ही दिखेगा।")
+                st.download_button(
+                    "⬇️ CSV Download करें (बिना Header)",
                     preview_df.to_csv(index=False).encode("utf-8-sig"),
                     file_name="print_panel_list.csv", mime="text/csv", use_container_width=True,
                 )
