@@ -2751,11 +2751,24 @@ elif choice == "P5 — Print Panel":
                 {1: (st.session_state.ph_size1, st.session_state.ph_color1),
                  2: (st.session_state.ph_size2, st.session_state.ph_color2),
                  3: (st.session_state.ph_size3, st.session_state.ph_color3)})
+            # Excel ka file name: "Degree (Branch) Year - Faculty Name.xlsx"
+            _xl_parts = []
+            for _d in st.session_state.get("ph_sel_defs", []):
+                _dg, _yr = parse_allotted_class(_d["c"])
+                _br = _d["b"].strip()
+                _xl_parts.append((f"{_dg}" + (f" ({_br})" if _br else "") + (f" {_yr}" if _yr else "")).strip())
+            if not _xl_parts:
+                _xl_parts = [_course_txt or "List"]
+            _xl_fname = ", ".join(dict.fromkeys(p for p in _xl_parts if p))
+            if st.session_state.ph_guardian_name.strip():
+                _xl_fname += f" - {st.session_state.ph_guardian_name.strip()}"
+            _xl_fname = re.sub(r'[\\/:*?"<>|\r\n\t]+', " ", _xl_fname)
+            _xl_fname = re.sub(r"\s+", " ", _xl_fname).strip()[:120].strip() or "print_panel_list"
             pr_col1, pr_col2 = st.columns(2)
             with pr_col1:
                 st.download_button(
                     "📗 Excel Download करें (Header के साथ)", _xl_bytes,
-                    file_name="print_panel_list.xlsx", mime=XLSX_MIME, use_container_width=True, key="p5_xlsx_dl",
+                    file_name=f"{_xl_fname}.xlsx", mime=XLSX_MIME, use_container_width=True, key="p5_xlsx_dl",
                     help="Print जैसा Header ऊपर और Table नीचे — Excel में खोलकर वैसा ही दिखेगा।")
                 st.download_button(
                     "⬇️ CSV Download करें (बिना Header)",
