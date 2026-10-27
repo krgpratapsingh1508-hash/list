@@ -950,6 +950,10 @@ st.markdown("""
     /* radio ka gola chhupao — label ke andar jo bhi <div>/<span> text wala nahi hai wahi gola hai */
     [data-testid="stMain"] div[role="radiogroup"] label > div:not([data-testid="stMarkdownContainer"]):not(:has([data-testid="stMarkdownContainer"])),
     [data-testid="stMain"] div[role="radiogroup"] label > span:not(:has([data-testid="stMarkdownContainer"])) { display: none !important; }
+    [data-testid="stMain"] div[role="radiogroup"] label > *:not(input):has(~ [data-testid="stMarkdownContainer"]),
+    [data-testid="stMain"] div[role="radiogroup"] label > *:not(input):has(~ * [data-testid="stMarkdownContainer"]),
+    [data-testid="stMain"] div[role="radiogroup"] label > div:not(:has([data-testid="stMarkdownContainer"])) > div:first-child:not(:has(p)),
+    [data-testid="stMain"] div[role="radiogroup"] label [data-baseweb="radio"] > div:first-child:not(:has(p)) { display: none !important; }
     [data-testid="stMain"] div[role="radiogroup"] label input { position: absolute; opacity: 0; pointer-events: none; }
     [data-testid="stMain"] div[role="radiogroup"] label p {
         margin: 0 !important; font-family: 'Poppins','Inter',sans-serif !important; font-size: 14px !important;
@@ -1422,7 +1426,7 @@ def faculty_upload_ui(key_prefix):
                                   | (aligned_fac["Tutor Department"].str.strip() != "")]
         save_faculty(aligned_fac.reset_index(drop=True))
         st.session_state["p3_fac_n"] = st.session_state.get("p3_fac_n", 0) + 1
-        st.session_state["p3_fac_flash"] = f"✅ {len(aligned_fac)} Guardian Tutors की List Save हो गई है।"
+        st.session_state["p1_flash" if key_prefix == "p1" else "p3_fac_flash"] = f"✅ {len(aligned_fac)} Guardian Tutors की List Save हो गई है।"
         st.rerun()
 
 
@@ -1844,11 +1848,12 @@ if choice == "P1 — Entry & Upload":
         st.success(_flash)
     mode = st.radio("तरीका चुनें", ["✍️ Single Entry (Form)", "📤 Bulk Upload (CSV/Excel)"], horizontal=True)
 
+    p1_single_target = st.radio(
+        "यह Entry किस Panel की है?" if mode == "✍️ Single Entry (Form)" else "यह List किस Panel की है?",
+        ["P2", "P3"], horizontal=True, key="p1_single_target",
+        format_func=lambda k: {"P2": "P2 — Students List", "P3": "P3 — Guardian Tutors List"}[k],
+    )
     if mode == "✍️ Single Entry (Form)":
-        p1_single_target = st.radio(
-            "यह Entry किस Panel की है?", ["P2", "P3"], horizontal=True, key="p1_single_target",
-            format_func=lambda k: {"P2": "P2 — Students List", "P3": "P3 — Guardian Tutors List"}[k],
-        )
         p1_single_panels = list(PANEL_OPTIONS.keys())   # P2 ki entry P2 (aur P5) me dikhti hai
         p1_single_dept = ""      # P4 hata diya gaya — ab Department chunne ki zaroorat nahi
     if mode == "✍️ Single Entry (Form)" and p1_single_target == "P3":
@@ -1896,6 +1901,10 @@ if choice == "P1 — Entry & Upload":
                 st.success("🎉 Entry सफलतापूर्वक Submit होकर सीधे Approve हो गई — "
                            f"{', '.join(p1_single_panels)} में दिखेगी" + (f" (Department: '{p1_single_dept}')।" if p1_single_dept else "।"))
                 st.balloons()
+
+    elif p1_single_target == "P3":
+        # Bulk Upload + P3: Guardian Tutors ki List ki file (P3 wala hi uploader, Template ke saath)
+        faculty_upload_ui("p1")
 
     else:
         st.info("CSV या Excel (.csv/.xlsx/.xls) फ़ाइलें अपलोड करें — एक साथ कई फ़ाइलें भी चुन सकते हैं। "
