@@ -931,6 +931,93 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================================
+# ✨ THEME CSS v4 — Radio (pill chips), Checkbox, File upload, Form, Tabs, Caption ka design
+# ==========================================================
+st.markdown("""
+    <style>
+    /* ---------- Radio: sundar "chip" buttons (jaise List kaise lagayein, Tarika chunein, Panel chunein) ---------- */
+    [data-testid="stMain"] div[role="radiogroup"] {
+        display: flex !important; flex-wrap: wrap !important; gap: 10px !important;
+        background: transparent !important; padding: 4px 0 !important; border-radius: 0 !important;
+    }
+    [data-testid="stMain"] div[role="radiogroup"] > label {
+        position: relative; display: inline-flex !important; align-items: center !important; margin: 0 !important;
+        background: #fff !important; border: 1.5px solid #D5DEEA !important; border-radius: 999px !important;
+        padding: 9px 20px !important; cursor: pointer !important; min-height: 42px;
+        box-shadow: 0 1px 2px rgba(15,42,74,.05) !important;
+        transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .12s ease !important;
+    }
+    /* radio ka gola chhupao (input chhota rehta hai, pehla <div> hi gola hota hai) */
+    [data-testid="stMain"] div[role="radiogroup"] > label > div:first-of-type:not(:last-of-type) { display: none !important; }
+    [data-testid="stMain"] div[role="radiogroup"] > label > div:first-child:not([data-testid]):has(+ div) { display: none !important; }
+    [data-testid="stMain"] div[role="radiogroup"] > label p {
+        margin: 0 !important; font-family: 'Poppins','Inter',sans-serif !important; font-size: 14px !important;
+        font-weight: 500 !important; color: #35506F !important; line-height: 1.3 !important;
+    }
+    [data-testid="stMain"] div[role="radiogroup"] > label:hover {
+        border-color: #C9973F !important; background: #FFF9EC !important; transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(201,151,63,.20) !important;
+    }
+    [data-testid="stMain"] div[role="radiogroup"] > label:has(input:checked) {
+        background: linear-gradient(135deg, #0F2A4A 0%, #1D4A7A 70%, #2A5E96 100%) !important;
+        border-color: #0F2A4A !important; box-shadow: 0 6px 16px rgba(15,42,74,.30) !important;
+    }
+    [data-testid="stMain"] div[role="radiogroup"] > label:has(input:checked) p { color: #fff !important; font-weight: 600 !important; }
+    [data-testid="stMain"] div[role="radiogroup"] > label:has(input:checked)::before {
+        content: "✓"; color: #E9C989; font-weight: 800; margin-right: 8px; font-size: 14px;
+    }
+    [data-testid="stMain"] div[role="radiogroup"] > label:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(201,151,63,.35) !important; }
+
+    /* ---------- Checkbox ---------- */
+    [data-testid="stMain"] .stCheckbox label { cursor: pointer; border-radius: 10px; padding: 4px 8px; transition: background .12s ease; }
+    [data-testid="stMain"] .stCheckbox label:hover { background: #F2F6FC; }
+    [data-testid="stMain"] .stCheckbox label p { font-weight: 500 !important; color: #1B2430 !important; }
+    [data-testid="stMain"] .stCheckbox [data-baseweb="checkbox"] > span:first-of-type { border-radius: 6px !important; border-width: 2px !important; }
+
+    /* ---------- File uploader (Drag & drop box) ---------- */
+    [data-testid="stFileUploaderDropzone"] {
+        background: linear-gradient(180deg, #FFFDF8 0%, #FFF8E8 100%) !important;
+        border: 2px dashed #D9B46A !important; border-radius: 16px !important; padding: 22px 18px !important;
+        transition: border-color .15s ease, background .15s ease, box-shadow .15s ease !important;
+    }
+    [data-testid="stFileUploaderDropzone"]:hover { border-color: #A97A25 !important; background: #FFF6DF !important; box-shadow: 0 6px 18px rgba(201,151,63,.18); }
+    [data-testid="stFileUploaderDropzone"] button {
+        background: linear-gradient(135deg, #0F2A4A 0%, #1D4A7A 100%) !important; color: #fff !important;
+        border: none !important; border-radius: 10px !important; font-weight: 600 !important; padding: .5rem 1.1rem !important;
+    }
+    [data-testid="stFileUploaderDropzone"] small, [data-testid="stFileUploaderDropzoneInstructions"] span { color: #6B5A33 !important; }
+    [data-testid="stFileUploaderFile"] { background: #fff; border: 1px solid #E3E9F1; border-radius: 10px; padding: 6px 10px; margin-top: 6px; }
+
+    /* ---------- Form card ---------- */
+    [data-testid="stForm"] {
+        background: #fff !important; border: 1px solid #D5DEEA !important; border-radius: 16px !important;
+        padding: 20px 22px !important; box-shadow: 0 1px 2px rgba(15,42,74,.06), 0 6px 18px rgba(15,42,74,.06) !important;
+        border-top: 4px solid #C9973F !important;
+    }
+
+    /* ---------- Tabs (agar kahin use ho) ---------- */
+    .stTabs [data-baseweb="tab-list"] { gap: 6px; background: #E9EEF5; padding: 5px; border-radius: 14px; }
+    .stTabs [data-baseweb="tab"] { border-radius: 10px !important; padding: 8px 18px !important; font-weight: 600 !important; color: #35506F !important; }
+    .stTabs [aria-selected="true"] { background: #fff !important; color: #0F2A4A !important; box-shadow: 0 1px 4px rgba(15,42,74,.15); }
+    .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none !important; }
+
+    /* ---------- Text / captions / headings ---------- */
+    [data-testid="stCaptionContainer"] p, .stCaption { color: #5B6B80 !important; font-size: 13px !important; }
+    input::placeholder, textarea::placeholder { color: #9AA9BC !important; }
+    [data-testid="stMain"] .stMarkdown h3, [data-testid="stMain"] .stMarkdown h4 { border-left: 5px solid #C9973F; padding-left: 12px; }
+
+    /* ---------- Sidebar ke chhote controls ---------- */
+    [data-testid="stSidebar"] .stButton > button { background: rgba(255,255,255,.08) !important; border: 1.5px solid rgba(255,255,255,.25) !important; color: #fff !important; }
+    [data-testid="stSidebar"] .stButton > button:hover { background: #C9973F !important; border-color: #C9973F !important; color: #0F2A4A !important; }
+
+    @media (max-width: 640px) {
+        [data-testid="stMain"] div[role="radiogroup"] > label { padding: 9px 14px !important; }
+        [data-testid="stForm"] { padding: 14px !important; }
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==========================================================
 # 🖨️ PRINT HELPER — button dabate hi browser ka Print dialog khulta hai
 # (sirf diya gaya HTML print hota hai; Streamlit page ka baaki hissa nahi)
 # ==========================================================
