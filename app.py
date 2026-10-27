@@ -1470,7 +1470,7 @@ if choice == "P1 — Entry & Upload":
         st.info("CSV या Excel (.csv/.xlsx/.xls) फ़ाइलें अपलोड करें — एक साथ कई फ़ाइलें भी चुन सकते हैं। "
                 "मिलते-जुलते नाम वाले कॉलम (जैसे DOB, Email, Mobile No) अपने आप सही जगह मैच हो जाएंगे — बाकी खाली रहेंगे।")
 
-        oc1, oc4 = st.columns(2)
+        oc1, _ = st.columns(2)
         with oc1:
             _p1_year_now = datetime.now().year
             _p1_year_options = [str(y) for y in range(_p1_year_now + 2, _p1_year_now - 8, -1)]
@@ -1480,16 +1480,10 @@ if choice == "P1 — Entry & Upload":
                 index=_p1_year_options.index(str(_p1_year_now)) if str(_p1_year_now) in _p1_year_options else 0,
                 key="p1_common_year",
             )
-        with oc4:
-            p1_bulk_panels = st.multiselect(
-                "यह List किन Panels में दिखे?", list(PANEL_OPTIONS.keys()), default=list(PANEL_OPTIONS.keys()),
-                format_func=lambda k: PANEL_OPTIONS[k], key="p1_bulk_panels",
-            )
+        p1_bulk_panels = list(PANEL_OPTIONS.keys())   # upload ki hui list P2 me jati hi hai — panel choice ki zaroorat nahi
         st.caption(f"ऊपर चुना गया Admission Year ('{p1_common_year}') इस पूरी अपलोड होने वाली List की सभी rows में लागू होगा "
                    "(भले ही फ़ाइल में पहले से कुछ भरा हो) — ताकि P2 में हर list का सही Year साफ़ दिखे। "
                    "फ़ाइल में 'Current Year' और 'Admission Session' कॉलम हों तो वही रखे जाते हैं।")
-        if not p1_bulk_panels:
-            st.warning("⚠️ कम से कम एक Panel चुनें, तभी List जोड़ी जा सकेगी।")
         p1_bulk_dept = ""        # P4 hata diya gaya — ab Department chunne ki zaroorat nahi
 
         up_files = st.file_uploader("फ़ाइलें चुनें", type=["csv", "xlsx", "xls"], accept_multiple_files=True,
@@ -1541,11 +1535,11 @@ if choice == "P1 — Entry & Upload":
             if all_new_rows:
                 total_rows = sum(len(a) for a in all_new_rows)
                 st.success(f"✅ कुल {len(all_new_rows)} फ़ाइलों से {total_rows} rows पढ़ ली गई हैं (Admission Year: **{p1_common_year}**) — नीचे बटन दबाकर पक्का जोड़ें।")
-                if st.button(f"📥 इन सभी {total_rows} Rows को Year '{p1_common_year}' के साथ सीधे Approve करके जोड़ें" + (f" ('{p1_bulk_dept}' में)" if p1_bulk_dept else ""), type="primary", disabled=not p1_bulk_panels):
+                if st.button(f"📥 इन सभी {total_rows} Rows को Year '{p1_common_year}' के साथ सीधे Approve करके जोड़ें" + (f" ('{p1_bulk_dept}' में)" if p1_bulk_dept else ""), type="primary"):
                     db = pd.concat([db] + all_new_rows, ignore_index=True)
                     save_db(db)
                     st.session_state["p1_flash"] = (
-                        f"🎉 {total_rows} rows (Admission Year: '{p1_common_year}') Approve होकर save हो गईं — {', '.join(p1_bulk_panels)} में दिखेंगी"
+                        f"🎉 {total_rows} rows (Admission Year: '{p1_common_year}') Approve होकर save हो गईं — P2 में दिखेंगी"
                         + (f" (Department: '{p1_bulk_dept}')" if p1_bulk_dept else "")
                         + f"। Database में अब कुल {len(db)} records हैं।"
                     )
