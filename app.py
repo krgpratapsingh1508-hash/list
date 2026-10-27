@@ -2966,6 +2966,10 @@ elif choice == "P5 — Print Panel":
             _p5_dl = dict(dl_bytes=_xl_bytes, dl_name=f"{_xl_fname}.xlsx", dl_mime=XLSX_MIME)
             with pr_col2:
                 st.download_button(
+                    "📗 Excel Download करें (Header के साथ)", _xl_bytes,
+                    file_name=f"{_xl_fname}.xlsx", mime=XLSX_MIME, use_container_width=True, key="p5_xlsx_dl",
+                    help="Print जैसा Header ऊपर और Table नीचे — Excel में खोलकर वैसा ही दिखेगा।")
+                st.download_button(
                     "⬇️ CSV Download करें (बिना Header)",
                     preview_df.to_csv(index=False).encode("utf-8-sig"),
                     file_name="print_panel_list.csv", mime="text/csv", use_container_width=True,
@@ -2996,12 +3000,16 @@ elif choice == "P5 — Print Panel":
                                     f'{_build_header_html("Arial, sans-serif", line2_override=_cls_line2)}'
                                     f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
                         _sections.append(_cls_hdr + df_to_print_html(_cls_preview))
-                    print_button("".join(_sections), label="📗🖨️ Excel Download + Print (हर Class अलग से)", **_p5_dl)
+                    _p5_html = "".join(_sections)
+                    print_button(_p5_html, label="📗🖨️ Excel Download + Print (हर Class अलग से)", **_p5_dl)
+                    print_button(_p5_html, label="🖨️ Print करें (हर Class अलग से)")
                 else:
                     _table_html = df_to_print_html(preview_df)
                     _hdr = (f'<div style="margin-bottom:10px;">{_build_header_html("Arial, sans-serif")}'
                             f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
-                    print_button(_hdr + _table_html, label="📗🖨️ Excel Download + Print एक साथ", **_p5_dl)
+                    _p5_html = _hdr + _table_html
+                    print_button(_p5_html, label="📗🖨️ Excel Download + Print एक साथ", **_p5_dl)
+                    print_button(_p5_html, label="🖨️ Print करें")
         else:
             st.warning("⚠️ Print करने के लिए कम से कम एक Column चुनें।")
 
