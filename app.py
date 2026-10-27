@@ -1412,6 +1412,264 @@ if role != "admin":
     st.warning("⚠️ इस User के लिए कोई Panel उपलब्ध नहीं है। कृपया Logout करके Admin से संपर्क करें।")
     st.stop()
 
+def p3_make_helpers(db, _fac, _p3_class_col, _p3_branch_col, _p3_serial_col):
+    """P3 ke Degree/Branch/Year/Serial helper functions (P1 aur P3 dono me kaam aate hain)."""
+    # Degree -> Branch -> Year: teeno dropdown P2 ki List (database) se aate hain aur ek doosre par depend karte hain —
+    # Degree chunne par sirf usi Degree ki Branch, Branch chunne par sirf usi (Degree + Branch) ka Year dikhta hai.
+    P3_ALL_BRANCH = "ALL"      # Branch dropdown ka "ALL" option: us Degree + Year ki saari Branch ke Students
+
+    def _p3_match(df, col, val):
+        if not val or col not in df.columns or (col == "Branch" and val == P3_ALL_BRANCH):
+            return df
+        return df[df[col].astype(str).str.strip() == val]
+
+    def _p3_uniq(df, col, norm=None):
+        if col not in df.columns:
+            return []
+        # Value ko comma par todna nahi hai — Branch ke naam me khud comma ho sakta hai (jaise "B. Com in Banking, Financial Services ...")
+        vals = [v.strip() for v in df[col].astype(str) if v.strip()]
+        if norm:
+            vals = [norm(v) for v in vals]
+        return list(dict.fromkeys(sorted(vals)))
+
+    _p3_deg_base = _p3_uniq(db, "Degree")
+
+    def _p3_branch_base(deg):
+        _b = _p3_uniq(_p3_match(db, "Degree", deg), "Branch")
+        return ([P3_ALL_BRANCH] + _b) if _b else _b
+
+    def _p3_year_base(deg, br):
+        sub = _p3_match(_p3_match(db, "Degree", deg), "Branch", br)
+        found = _p3_uniq(sub, "Current Year", normalize_course_year)
+        ordered = [y for y in COURSE_YEAR_OPTIONS if y in found] + [y for y in found if y not in COURSE_YEAR_OPTIONS]
+        return ordered or list(COURSE_YEAR_OPTIONS)
+
+    def _p3_opts(base, extra=""):
+        extra = str(extra).strip()
+        return [""] + list(base) + ([extra] if extra and extra not in base else [])
+
+    def _p3_guard(key, opts):
+        # Upar wali choice badalne par agar neeche wali purani choice ab list me nahi hai to use khaali kar do
+        if st.session_state.get(key, "") not in opts:
+            st.session_state[key] = ""
+
+    # ---- Serial No.: chune hue (Degree + Branch + Year) ke Students ko Name se A-Z karke 1..N Serial milta hai;
+    # ek baar jo Serial kisi Tutor ko diya gaya wo usi Class me kisi aur Tutor ko nahi mil sakta ----
+    def _p3_class_key(cls_text, br):
+        _dg, _yr = parse_allotted_class(cls_text)
+        return (_dg.strip().lower(), str(br).strip().lower(), _yr)
+
+    def _p3_class_students(deg, br, yr):
+        # Degree ka naam save hote waqt thoda badal sakta hai (B.Com -> B.Com.), isliye symbols/case ignore karke match karte hain
+        _nk = lambda v: re.sub(r"[^a-z0-9]", "", str(v).lower())
+        sub = _p3_match(db, "Branch", br)
+        if "Degree" in sub.columns:
+            sub = sub[sub["Degree"].map(_nk) == _nk(deg)]
+        if "Current Year" in sub.columns:
+            sub = sub[sub["Current Year"].astype(str).map(normalize_course_year).str.strip() == yr]
+        sub = sub.assign(_k=sub["Student Name"].astype(str).str.strip().str.lower()).sort_values("_k", kind="stable")
+        return sub.reset_index(drop=True)
+
+    def _p3_taken(key, exclude_idx):
+        """Isi Class (key) ke wo Serial jo dusre Tutors ko mil chuke: {serial_no: tutor_name}"""
+        taken = {}
+        for _ti, _tr in _fac.iterrows():
+            if _ti == exclude_idx:
+                continue
+            _cl = str(_tr[_p3_class_col]).split("\n")
+            _bl = str(_tr[_p3_branch_col]).split("\n")
+            _sl = str(_tr[_p3_serial_col]).split("\n")
+            for _li, _c in enumerate(_cl):
+                if not _c.strip() or _li >= len(_sl):
+                    continue
+                if _p3_class_key(_c, _bl[_li] if _li < len(_bl) else "") == key:
+                    for _a, _b in _p3_parse_ranges(_sl[_li])[0]:
+                        for _n in range(_a, _b + 1):
+                            taken[_n] = str(_tr["Faculty Name"]).strip() or "(बिना नाम)"
+        return taken
+
+    def _p3_serial_choices(deg, br, yr, exclude_idx, frm, extra=()):
+        """FROM / TO dropdown ke options: sirf wahi Serial jo is Class me khaali hain (type karke bhi dhoondh sakte hain).
+        TO me FROM se aage ke wahi Serial aate hain jo FROM se lagatar khaali hon (beech me kisi aur Tutor ka Serial na aaye)."""
+        if not (deg and br and yr):
+            return [""], [""]
+        _n = len(_p3_class_students(deg, br, yr))
+        _tk = _p3_taken(_p3_class_key(f"{deg} {yr}", br), exclude_idx)
+        for _x in extra:                       # isi form ki pichhli lines me jo Serial is Class ke liye diye ja chuke
+            _tk.setdefault(_x, "इसी Tutor की पिछली लाइन")
+        _free = [n for n in range(1, _n + 1) if n not in _tk]
+        _to = []
+        if str(frm).strip().isdigit():
+            _f = int(str(frm).strip())
+            _n2 = _f + 1                       # TO me FROM ke BAAD ke Serial (sirf ek Serial ho to TO khaali chhodein)
+            while _n2 <= _n and _n2 not in _tk:
+                _to.append(_n2)
+                _n2 += 1
+        return [""] + [str(n) for n in _free], [""] + [str(n) for n in _to]
+
+    def _p3_serial_panel(deg, br, yr, exclude_idx, uid, extra=()):
+        if not (deg and br and yr):
+            st.caption("ℹ️ Degree, Branch aur Year तीनों चुनने पर यहाँ उस Class के Serial No. की जानकारी दिखेगी।")
+            return
+        _stu = _p3_class_students(deg, br, yr)
+        _tk = _p3_taken(_p3_class_key(f"{deg} {yr}", br), exclude_idx)
+        for _x in extra:
+            _tk.setdefault(_x, "इसी Tutor की पिछली लाइन")
+        _free = [n for n in range(1, len(_stu) + 1) if n not in _tk]
+        _msg = (f"📋 इस Class में कुल **{len(_stu)}** Students (नाम के A–Z क्रम में Serial 1–{len(_stu)}) · "
+                f"✅ खाली Serial: **{_p3_compress(_free) or 'कोई नहीं'}**")
+        if _tk:
+            _by = {}
+            for _n, _t in _tk.items():
+                _by.setdefault(_t, []).append(_n)
+            _msg += " · 🔒 पहले से दिए गए: " + "; ".join(f"{_p3_compress(v)} → {k}" for k, v in _by.items())
+        st.caption(_msg)
+        if len(_stu) and st.checkbox("👁️ इस Class के Students (Serial के साथ) दिखाएँ", key=f"p3_show_stu_{uid}"):
+            _tbl = pd.DataFrame({
+                "Serial No.": range(1, len(_stu) + 1),
+                "Student Name": _stu["Student Name"].astype(str).str.strip(),
+                "Father Name": _stu["Father Name"].astype(str).str.strip() if "Father Name" in _stu.columns else "",
+                "Tutor": [_tk.get(n, "—") for n in range(1, len(_stu) + 1)],
+            })
+            show_list(_tbl, hide_index=True, use_container_width=True)
+
+    def _p3_validate(rows, exclude_idx):
+        """rows = [(class_text, branch, serial_text)] — galtiyon ki list lautata hai (khaali = sab theek)"""
+        errs, own = [], {}
+        for _c, _b, _srl in rows:
+            if not str(_srl).strip():
+                continue
+            _ranges, _bad = _p3_parse_ranges(_srl)
+            if _bad:
+                errs.append(f"'{_srl}' सही Serial No. नहीं है — FROM और TO में सिर्फ़ अंक (number) भरें, और TO, FROM से छोटा न हो।")
+                continue
+            _key = _p3_class_key(_c, _b)
+            if not all(_key):
+                continue
+            _deg_raw, _yr_raw = parse_allotted_class(_c)
+            _n_stu = len(_p3_class_students(_deg_raw, _b, _yr_raw))
+            _tk = _p3_taken(_key, exclude_idx)
+            _used = own.setdefault(_key, set())
+            for _a, _z in _ranges:
+                if _n_stu and _z > _n_stu:
+                    errs.append(f"{_c} / {_b}: Serial {_a}-{_z} इस Class के कुल {_n_stu} Students से बाहर है।")
+                for _n in range(_a, _z + 1):
+                    if _n in _tk:
+                        errs.append(f"{_c} / {_b}: Serial {_n} पहले से '{_tk[_n]}' को दिया जा चुका है।")
+                        break
+                    if _n in _used:
+                        errs.append(f"{_c} / {_b}: Serial {_n} इसी Tutor की दूसरी लाइन में भी आ गया है।")
+                        break
+                _used.update(range(_a, _z + 1))
+        return errs
+    return (P3_ALL_BRANCH, _p3_match, _p3_uniq, _p3_deg_base, _p3_branch_base, _p3_year_base, _p3_opts, _p3_guard, _p3_class_key, _p3_class_students, _p3_taken, _p3_serial_choices, _p3_serial_panel, _p3_validate,)
+
+def p3_add_tutor_form(db, _fac, _dept_opts, _p3_subj_type, _p3_class_col, _p3_branch_col, _p3_serial_col, _p3_total_col,
+                     _flash_key="p3_fac_flash", _expanded=False):
+    """'➕ नया Tutor जोड़ें' form — P3 me aur P1 (Single Entry → P3) me same."""
+    (P3_ALL_BRANCH, _p3_match, _p3_uniq, _p3_deg_base, _p3_branch_base, _p3_year_base, _p3_opts, _p3_guard,
+     _p3_class_key, _p3_class_students, _p3_taken, _p3_serial_choices, _p3_serial_panel, _p3_validate
+     ) = p3_make_helpers(db, _fac, _p3_class_col, _p3_branch_col, _p3_serial_col)
+    with st.expander(f"➕ नया Tutor जोड़ें ({_p3_subj_type})", expanded=_expanded):
+        _n_dept_opts = _dept_opts if _dept_opts else [""]
+        if "p3_add_cls_n" not in st.session_state:
+            st.session_state["p3_add_cls_n"] = 1
+        with st.container():
+            _n_tdept = st.selectbox("DEPARTMENT", _n_dept_opts, key="p3_add_tdept")
+            _n_name = st.text_input("NAME OF GUARDIANS TUTORS", key="p3_add_name")
+            _n_mob = st.text_input("MOBILE NO.", key="p3_add_mob")
+            st.markdown(f"**Degree + Year + Branch + SERIAL NO. ({_p3_subj_type})** — हर Class के साथ उसका SERIAL NO. भी साथ में लिखें; "
+                        "एक से ज़्यादा Class हों तो नीचे ➕ से और जोड़ी जोड़ें (जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा)")
+            _n_cls_vals, _n_srl_vals, _n_br_vals = [], [], []
+            _n_used = {}      # {Class key: us Class ke wo Serial jo isi form ki pichhli lines me de diye}
+            for _ci in range(st.session_state["p3_add_cls_n"]):
+                _cc1, _cc3, _cc1y, _cc2, _cc2b = st.columns(5)
+                with _cc1:
+                    _n_deg = st.selectbox(f"Degree {_ci + 1}", _p3_opts(_p3_deg_base), key=f"p3_add_cls_{_ci}",
+                                          help="P2 की List के Degree column से" if _ci == 0 else None)
+                with _cc3:
+                    _o = _p3_opts(_p3_branch_base(_n_deg))
+                    _p3_guard(f"p3_add_br_{_ci}", _o)
+                    _n_br = st.selectbox(f"Branch {_ci + 1}", _o, key=f"p3_add_br_{_ci}",
+                                         help="चुने गए Degree की ही Branch दिखेंगी" if _ci == 0 else None)
+                    _n_br_vals.append(_n_br)
+                with _cc1y:
+                    _o = _p3_opts(_p3_year_base(_n_deg, _n_br))
+                    _p3_guard(f"p3_add_yr_{_ci}", _o)
+                    _n_yr = st.selectbox(f"Year {_ci + 1}", _o, key=f"p3_add_yr_{_ci}",
+                                         help="चुने गए Degree + Branch का ही Year दिखेगा" if _ci == 0 else None)
+                _n_cls_vals.append(f"{_n_deg.strip()} {_n_yr}".strip())
+                with _cc2:
+                    _ck = _p3_class_key(f"{_n_deg} {_n_yr}", _n_br)
+                    _of, _ = _p3_serial_choices(_n_deg, _n_br, _n_yr, None, "", _n_used.get(_ck, ()))
+                    _p3_guard(f"p3_add_srl_{_ci}", _of)
+                    _n_sf = st.selectbox(f"FROM SERIAL NO. {_ci + 1}", _of, key=f"p3_add_srl_{_ci}",
+                                         help="सिर्फ़ खाली Serial दिखते हैं — scroll करें या number type करें" if _ci == 0 else None)
+                with _cc2b:
+                    _, _ot = _p3_serial_choices(_n_deg, _n_br, _n_yr, None, _n_sf, _n_used.get(_ck, ()))
+                    _p3_guard(f"p3_add_srl_to_{_ci}", _ot)
+                    _n_st = st.selectbox(f"TO SERIAL NO. {_ci + 1}", _ot, key=f"p3_add_srl_to_{_ci}",
+                                         help="FROM से लगातार खाली Serial ही दिखते हैं" if _ci == 0 else None)
+                _n_srl_vals.append(_p3_compose_serial(_n_sf, _n_st))
+                _p3_serial_panel(_n_deg, _n_br, _n_yr, None, f"add_{_ci}", _n_used.get(_ck, ()))
+                if all(_ck):
+                    for _ra, _rb in _p3_parse_ranges(_n_srl_vals[-1])[0]:
+                        _n_used.setdefault(_ck, set()).update(range(_ra, _rb + 1))
+            _fb1, _fb2, _fb3 = st.columns(3)
+            with _fb1:
+                _n_save = st.button("💾 जोड़ें", type="primary", use_container_width=True, key="p3_add_save_btn")
+            with _fb2:
+                _n_add_cls = st.button("➕ Class + SERIAL जोड़ें", use_container_width=True, key="p3_add_addcls_btn")
+            with _fb3:
+                _n_rm_cls = st.button("➖ Class + SERIAL हटाएँ", use_container_width=True, key="p3_add_rmcls_btn",
+                                                    disabled=st.session_state["p3_add_cls_n"] <= 1)
+        if _n_add_cls:
+            st.session_state["p3_add_cls_n"] += 1
+            st.rerun()
+        if _n_rm_cls and st.session_state["p3_add_cls_n"] > 1:
+            _n_last = st.session_state["p3_add_cls_n"] - 1
+            st.session_state.pop(f"p3_add_cls_{_n_last}", None)
+            st.session_state.pop(f"p3_add_srl_{_n_last}", None)
+            st.session_state.pop(f"p3_add_srl_to_{_n_last}", None)
+            st.session_state.pop(f"p3_add_br_{_n_last}", None)
+            st.session_state.pop(f"p3_add_yr_{_n_last}", None)
+            st.session_state["p3_add_cls_n"] -= 1
+            st.rerun()
+        if _n_save:
+            _n_errs = _p3_validate(list(zip(_n_cls_vals, _n_br_vals, _n_srl_vals)), None)
+            if not _n_name.strip() and not _n_tdept.strip():
+                st.warning("⚠️ कम से कम NAME या DEPARTMENT भरें।")
+            elif _n_errs:
+                for _m in _n_errs:
+                    st.error("❌ " + _m)
+            else:
+                _n_pairs = [(c.strip(), s.strip(), b.strip()) for c, s, b in zip(_n_cls_vals, _n_srl_vals, _n_br_vals)
+                            if c.strip() or s.strip() or b.strip()]
+                _n_cls_ml = "\n".join(c for c, s, b in _n_pairs)
+                _n_srl_ml = "\n".join(s for c, s, b in _n_pairs)
+                _n_br_ml = "\n".join(b for c, s, b in _n_pairs)
+                _new_row = {col: "" for col in FACULTY_COLUMNS}
+                _new_row.update({
+                    "Faculty Name": _n_name.strip(),
+                    "Designation": "",
+                    "Mobile Number": _n_mob.strip(),
+                    "Tutor Department": _n_tdept.strip(),
+                    _p3_class_col: _n_cls_ml,
+                    _p3_serial_col: _n_srl_ml,
+                    _p3_branch_col: _n_br_ml,
+                    _p3_total_col: _p3_total_from_serial(_n_srl_ml),
+                })
+                _fac2 = pd.concat([_fac, pd.DataFrame([_new_row])], ignore_index=True)
+                save_faculty(_fac2[FACULTY_COLUMNS])
+                for _k in [k for k in list(st.session_state.keys())
+                           if k.startswith("p3_add_cls_") or k.startswith("p3_add_srl_") or k.startswith("p3_add_br_")
+                           or k.startswith("p3_add_yr_")]:
+                    st.session_state.pop(_k, None)
+                st.session_state["p3_add_cls_n"] = 1
+                st.session_state[_flash_key] = f"✅ '{_n_name.strip() or '(बिना नाम)'}' जुड़ गए।"
+                st.rerun()
+
+
 db = load_db()
 
 # ==========================================================
@@ -1425,11 +1683,22 @@ if choice == "P1 — Entry & Upload":
     mode = st.radio("तरीका चुनें", ["✍️ Single Entry (Form)", "📤 Bulk Upload (CSV/Excel)"], horizontal=True)
 
     if mode == "✍️ Single Entry (Form)":
-        p1_single_panels = st.multiselect(
-            "यह Entry किन Panels में दिखे?", list(PANEL_OPTIONS.keys()), default=list(PANEL_OPTIONS.keys()),
-            format_func=lambda k: PANEL_OPTIONS[k], key="p1_single_panels",
+        p1_single_target = st.radio(
+            "यह Entry किस Panel की है?", ["P2", "P3"], horizontal=True, key="p1_single_target",
+            format_func=lambda k: {"P2": "P2 — Students List", "P3": "P3 — Guardian Tutors List"}[k],
         )
+        p1_single_panels = list(PANEL_OPTIONS.keys())   # P2 ki entry P2 (aur P5) me dikhti hai
         p1_single_dept = ""      # P4 hata diya gaya — ab Department chunne ki zaroorat nahi
+    if mode == "✍️ Single Entry (Form)" and p1_single_target == "P3":
+        # P3 chuna: Guardian Tutor ke columns (Department, Name, Mobile, Degree/Branch/Year + Serial No.) me entry
+        _p1_fac = load_faculty().reset_index(drop=True)
+        _p1_sf = SUBJECT_TYPE_FIELDS["Major Subject"]
+        _p1_dept_opts = list(dict.fromkeys(
+            list(st.session_state.departments) + [d for d in _p1_fac["Tutor Department"].astype(str).str.strip() if d]))
+        p3_add_tutor_form(db, _p1_fac, _p1_dept_opts, "Major Subject",
+                          _p1_sf["class"], _p1_sf["branch"], _p1_sf["serial"], _p1_sf["total"],
+                          _flash_key="p1_flash", _expanded=True)
+    elif mode == "✍️ Single Entry (Form)":
         with st.form("single_entry_form"):
             st.caption("नीचे जितने columns भरने हैं भरें — बाकी खाली छोड़ सकते हैं।")
             values = {}
@@ -1812,256 +2081,12 @@ elif choice == "P3 — Guardian Tutors List":
                                mime=XLSX_MIME, use_container_width=True, key="p3_backup_dl",
                                help="P3 की table वाले ही columns। इसी फ़ाइल को P3 → '📤 फ़ाइल से List अपलोड करें' में डालकर List वापस ला सकते हैं।")
 
-    # Degree -> Branch -> Year: teeno dropdown P2 ki List (database) se aate hain aur ek doosre par depend karte hain —
-    # Degree chunne par sirf usi Degree ki Branch, Branch chunne par sirf usi (Degree + Branch) ka Year dikhta hai.
-    P3_ALL_BRANCH = "ALL"      # Branch dropdown ka "ALL" option: us Degree + Year ki saari Branch ke Students
+    (P3_ALL_BRANCH, _p3_match, _p3_uniq, _p3_deg_base, _p3_branch_base, _p3_year_base, _p3_opts, _p3_guard,
+     _p3_class_key, _p3_class_students, _p3_taken, _p3_serial_choices, _p3_serial_panel, _p3_validate
+     ) = p3_make_helpers(db, _fac, _p3_class_col, _p3_branch_col, _p3_serial_col)
 
-    def _p3_match(df, col, val):
-        if not val or col not in df.columns or (col == "Branch" and val == P3_ALL_BRANCH):
-            return df
-        return df[df[col].astype(str).str.strip() == val]
-
-    def _p3_uniq(df, col, norm=None):
-        if col not in df.columns:
-            return []
-        # Value ko comma par todna nahi hai — Branch ke naam me khud comma ho sakta hai (jaise "B. Com in Banking, Financial Services ...")
-        vals = [v.strip() for v in df[col].astype(str) if v.strip()]
-        if norm:
-            vals = [norm(v) for v in vals]
-        return list(dict.fromkeys(sorted(vals)))
-
-    _p3_deg_base = _p3_uniq(db, "Degree")
-
-    def _p3_branch_base(deg):
-        _b = _p3_uniq(_p3_match(db, "Degree", deg), "Branch")
-        return ([P3_ALL_BRANCH] + _b) if _b else _b
-
-    def _p3_year_base(deg, br):
-        sub = _p3_match(_p3_match(db, "Degree", deg), "Branch", br)
-        found = _p3_uniq(sub, "Current Year", normalize_course_year)
-        ordered = [y for y in COURSE_YEAR_OPTIONS if y in found] + [y for y in found if y not in COURSE_YEAR_OPTIONS]
-        return ordered or list(COURSE_YEAR_OPTIONS)
-
-    def _p3_opts(base, extra=""):
-        extra = str(extra).strip()
-        return [""] + list(base) + ([extra] if extra and extra not in base else [])
-
-    def _p3_guard(key, opts):
-        # Upar wali choice badalne par agar neeche wali purani choice ab list me nahi hai to use khaali kar do
-        if st.session_state.get(key, "") not in opts:
-            st.session_state[key] = ""
-
-    # ---- Serial No.: chune hue (Degree + Branch + Year) ke Students ko Name se A-Z karke 1..N Serial milta hai;
-    # ek baar jo Serial kisi Tutor ko diya gaya wo usi Class me kisi aur Tutor ko nahi mil sakta ----
-    def _p3_class_key(cls_text, br):
-        _dg, _yr = parse_allotted_class(cls_text)
-        return (_dg.strip().lower(), str(br).strip().lower(), _yr)
-
-    def _p3_class_students(deg, br, yr):
-        # Degree ka naam save hote waqt thoda badal sakta hai (B.Com -> B.Com.), isliye symbols/case ignore karke match karte hain
-        _nk = lambda v: re.sub(r"[^a-z0-9]", "", str(v).lower())
-        sub = _p3_match(db, "Branch", br)
-        if "Degree" in sub.columns:
-            sub = sub[sub["Degree"].map(_nk) == _nk(deg)]
-        if "Current Year" in sub.columns:
-            sub = sub[sub["Current Year"].astype(str).map(normalize_course_year).str.strip() == yr]
-        sub = sub.assign(_k=sub["Student Name"].astype(str).str.strip().str.lower()).sort_values("_k", kind="stable")
-        return sub.reset_index(drop=True)
-
-    def _p3_taken(key, exclude_idx):
-        """Isi Class (key) ke wo Serial jo dusre Tutors ko mil chuke: {serial_no: tutor_name}"""
-        taken = {}
-        for _ti, _tr in _fac.iterrows():
-            if _ti == exclude_idx:
-                continue
-            _cl = str(_tr[_p3_class_col]).split("\n")
-            _bl = str(_tr[_p3_branch_col]).split("\n")
-            _sl = str(_tr[_p3_serial_col]).split("\n")
-            for _li, _c in enumerate(_cl):
-                if not _c.strip() or _li >= len(_sl):
-                    continue
-                if _p3_class_key(_c, _bl[_li] if _li < len(_bl) else "") == key:
-                    for _a, _b in _p3_parse_ranges(_sl[_li])[0]:
-                        for _n in range(_a, _b + 1):
-                            taken[_n] = str(_tr["Faculty Name"]).strip() or "(बिना नाम)"
-        return taken
-
-    def _p3_serial_choices(deg, br, yr, exclude_idx, frm, extra=()):
-        """FROM / TO dropdown ke options: sirf wahi Serial jo is Class me khaali hain (type karke bhi dhoondh sakte hain).
-        TO me FROM se aage ke wahi Serial aate hain jo FROM se lagatar khaali hon (beech me kisi aur Tutor ka Serial na aaye)."""
-        if not (deg and br and yr):
-            return [""], [""]
-        _n = len(_p3_class_students(deg, br, yr))
-        _tk = _p3_taken(_p3_class_key(f"{deg} {yr}", br), exclude_idx)
-        for _x in extra:                       # isi form ki pichhli lines me jo Serial is Class ke liye diye ja chuke
-            _tk.setdefault(_x, "इसी Tutor की पिछली लाइन")
-        _free = [n for n in range(1, _n + 1) if n not in _tk]
-        _to = []
-        if str(frm).strip().isdigit():
-            _f = int(str(frm).strip())
-            _n2 = _f + 1                       # TO me FROM ke BAAD ke Serial (sirf ek Serial ho to TO khaali chhodein)
-            while _n2 <= _n and _n2 not in _tk:
-                _to.append(_n2)
-                _n2 += 1
-        return [""] + [str(n) for n in _free], [""] + [str(n) for n in _to]
-
-    def _p3_serial_panel(deg, br, yr, exclude_idx, uid, extra=()):
-        if not (deg and br and yr):
-            st.caption("ℹ️ Degree, Branch aur Year तीनों चुनने पर यहाँ उस Class के Serial No. की जानकारी दिखेगी।")
-            return
-        _stu = _p3_class_students(deg, br, yr)
-        _tk = _p3_taken(_p3_class_key(f"{deg} {yr}", br), exclude_idx)
-        for _x in extra:
-            _tk.setdefault(_x, "इसी Tutor की पिछली लाइन")
-        _free = [n for n in range(1, len(_stu) + 1) if n not in _tk]
-        _msg = (f"📋 इस Class में कुल **{len(_stu)}** Students (नाम के A–Z क्रम में Serial 1–{len(_stu)}) · "
-                f"✅ खाली Serial: **{_p3_compress(_free) or 'कोई नहीं'}**")
-        if _tk:
-            _by = {}
-            for _n, _t in _tk.items():
-                _by.setdefault(_t, []).append(_n)
-            _msg += " · 🔒 पहले से दिए गए: " + "; ".join(f"{_p3_compress(v)} → {k}" for k, v in _by.items())
-        st.caption(_msg)
-        if len(_stu) and st.checkbox("👁️ इस Class के Students (Serial के साथ) दिखाएँ", key=f"p3_show_stu_{uid}"):
-            _tbl = pd.DataFrame({
-                "Serial No.": range(1, len(_stu) + 1),
-                "Student Name": _stu["Student Name"].astype(str).str.strip(),
-                "Father Name": _stu["Father Name"].astype(str).str.strip() if "Father Name" in _stu.columns else "",
-                "Tutor": [_tk.get(n, "—") for n in range(1, len(_stu) + 1)],
-            })
-            show_list(_tbl, hide_index=True, use_container_width=True)
-
-    def _p3_validate(rows, exclude_idx):
-        """rows = [(class_text, branch, serial_text)] — galtiyon ki list lautata hai (khaali = sab theek)"""
-        errs, own = [], {}
-        for _c, _b, _srl in rows:
-            if not str(_srl).strip():
-                continue
-            _ranges, _bad = _p3_parse_ranges(_srl)
-            if _bad:
-                errs.append(f"'{_srl}' सही Serial No. नहीं है — FROM और TO में सिर्फ़ अंक (number) भरें, और TO, FROM से छोटा न हो।")
-                continue
-            _key = _p3_class_key(_c, _b)
-            if not all(_key):
-                continue
-            _deg_raw, _yr_raw = parse_allotted_class(_c)
-            _n_stu = len(_p3_class_students(_deg_raw, _b, _yr_raw))
-            _tk = _p3_taken(_key, exclude_idx)
-            _used = own.setdefault(_key, set())
-            for _a, _z in _ranges:
-                if _n_stu and _z > _n_stu:
-                    errs.append(f"{_c} / {_b}: Serial {_a}-{_z} इस Class के कुल {_n_stu} Students से बाहर है।")
-                for _n in range(_a, _z + 1):
-                    if _n in _tk:
-                        errs.append(f"{_c} / {_b}: Serial {_n} पहले से '{_tk[_n]}' को दिया जा चुका है।")
-                        break
-                    if _n in _used:
-                        errs.append(f"{_c} / {_b}: Serial {_n} इसी Tutor की दूसरी लाइन में भी आ गया है।")
-                        break
-                _used.update(range(_a, _z + 1))
-        return errs
-
-    # ----------------------------------------------------------------
-    # ➕ NAYA TUTOR JODEIN
-    # ----------------------------------------------------------------
-    with st.expander(f"➕ नया Tutor जोड़ें ({_p3_subj_type})"):
-        _n_dept_opts = _dept_opts if _dept_opts else [""]
-        if "p3_add_cls_n" not in st.session_state:
-            st.session_state["p3_add_cls_n"] = 1
-        with st.container():
-            _n_tdept = st.selectbox("DEPARTMENT", _n_dept_opts, key="p3_add_tdept")
-            _n_name = st.text_input("NAME OF GUARDIANS TUTORS", key="p3_add_name")
-            _n_mob = st.text_input("MOBILE NO.", key="p3_add_mob")
-            st.markdown(f"**Degree + Year + Branch + SERIAL NO. ({_p3_subj_type})** — हर Class के साथ उसका SERIAL NO. भी साथ में लिखें; "
-                        "एक से ज़्यादा Class हों तो नीचे ➕ से और जोड़ी जोड़ें (जोड़ी हटाने पर Class के साथ उसका SERIAL NO. भी हट जाएगा)")
-            _n_cls_vals, _n_srl_vals, _n_br_vals = [], [], []
-            _n_used = {}      # {Class key: us Class ke wo Serial jo isi form ki pichhli lines me de diye}
-            for _ci in range(st.session_state["p3_add_cls_n"]):
-                _cc1, _cc3, _cc1y, _cc2, _cc2b = st.columns(5)
-                with _cc1:
-                    _n_deg = st.selectbox(f"Degree {_ci + 1}", _p3_opts(_p3_deg_base), key=f"p3_add_cls_{_ci}",
-                                          help="P2 की List के Degree column से" if _ci == 0 else None)
-                with _cc3:
-                    _o = _p3_opts(_p3_branch_base(_n_deg))
-                    _p3_guard(f"p3_add_br_{_ci}", _o)
-                    _n_br = st.selectbox(f"Branch {_ci + 1}", _o, key=f"p3_add_br_{_ci}",
-                                         help="चुने गए Degree की ही Branch दिखेंगी" if _ci == 0 else None)
-                    _n_br_vals.append(_n_br)
-                with _cc1y:
-                    _o = _p3_opts(_p3_year_base(_n_deg, _n_br))
-                    _p3_guard(f"p3_add_yr_{_ci}", _o)
-                    _n_yr = st.selectbox(f"Year {_ci + 1}", _o, key=f"p3_add_yr_{_ci}",
-                                         help="चुने गए Degree + Branch का ही Year दिखेगा" if _ci == 0 else None)
-                _n_cls_vals.append(f"{_n_deg.strip()} {_n_yr}".strip())
-                with _cc2:
-                    _ck = _p3_class_key(f"{_n_deg} {_n_yr}", _n_br)
-                    _of, _ = _p3_serial_choices(_n_deg, _n_br, _n_yr, None, "", _n_used.get(_ck, ()))
-                    _p3_guard(f"p3_add_srl_{_ci}", _of)
-                    _n_sf = st.selectbox(f"FROM SERIAL NO. {_ci + 1}", _of, key=f"p3_add_srl_{_ci}",
-                                         help="सिर्फ़ खाली Serial दिखते हैं — scroll करें या number type करें" if _ci == 0 else None)
-                with _cc2b:
-                    _, _ot = _p3_serial_choices(_n_deg, _n_br, _n_yr, None, _n_sf, _n_used.get(_ck, ()))
-                    _p3_guard(f"p3_add_srl_to_{_ci}", _ot)
-                    _n_st = st.selectbox(f"TO SERIAL NO. {_ci + 1}", _ot, key=f"p3_add_srl_to_{_ci}",
-                                         help="FROM से लगातार खाली Serial ही दिखते हैं" if _ci == 0 else None)
-                _n_srl_vals.append(_p3_compose_serial(_n_sf, _n_st))
-                _p3_serial_panel(_n_deg, _n_br, _n_yr, None, f"add_{_ci}", _n_used.get(_ck, ()))
-                if all(_ck):
-                    for _ra, _rb in _p3_parse_ranges(_n_srl_vals[-1])[0]:
-                        _n_used.setdefault(_ck, set()).update(range(_ra, _rb + 1))
-            _fb1, _fb2, _fb3 = st.columns(3)
-            with _fb1:
-                _n_save = st.button("💾 जोड़ें", type="primary", use_container_width=True, key="p3_add_save_btn")
-            with _fb2:
-                _n_add_cls = st.button("➕ Class + SERIAL जोड़ें", use_container_width=True, key="p3_add_addcls_btn")
-            with _fb3:
-                _n_rm_cls = st.button("➖ Class + SERIAL हटाएँ", use_container_width=True, key="p3_add_rmcls_btn",
-                                                    disabled=st.session_state["p3_add_cls_n"] <= 1)
-        if _n_add_cls:
-            st.session_state["p3_add_cls_n"] += 1
-            st.rerun()
-        if _n_rm_cls and st.session_state["p3_add_cls_n"] > 1:
-            _n_last = st.session_state["p3_add_cls_n"] - 1
-            st.session_state.pop(f"p3_add_cls_{_n_last}", None)
-            st.session_state.pop(f"p3_add_srl_{_n_last}", None)
-            st.session_state.pop(f"p3_add_srl_to_{_n_last}", None)
-            st.session_state.pop(f"p3_add_br_{_n_last}", None)
-            st.session_state.pop(f"p3_add_yr_{_n_last}", None)
-            st.session_state["p3_add_cls_n"] -= 1
-            st.rerun()
-        if _n_save:
-            _n_errs = _p3_validate(list(zip(_n_cls_vals, _n_br_vals, _n_srl_vals)), None)
-            if not _n_name.strip() and not _n_tdept.strip():
-                st.warning("⚠️ कम से कम NAME या DEPARTMENT भरें।")
-            elif _n_errs:
-                for _m in _n_errs:
-                    st.error("❌ " + _m)
-            else:
-                _n_pairs = [(c.strip(), s.strip(), b.strip()) for c, s, b in zip(_n_cls_vals, _n_srl_vals, _n_br_vals)
-                            if c.strip() or s.strip() or b.strip()]
-                _n_cls_ml = "\n".join(c for c, s, b in _n_pairs)
-                _n_srl_ml = "\n".join(s for c, s, b in _n_pairs)
-                _n_br_ml = "\n".join(b for c, s, b in _n_pairs)
-                _new_row = {col: "" for col in FACULTY_COLUMNS}
-                _new_row.update({
-                    "Faculty Name": _n_name.strip(),
-                    "Designation": "",
-                    "Mobile Number": _n_mob.strip(),
-                    "Tutor Department": _n_tdept.strip(),
-                    _p3_class_col: _n_cls_ml,
-                    _p3_serial_col: _n_srl_ml,
-                    _p3_branch_col: _n_br_ml,
-                    _p3_total_col: _p3_total_from_serial(_n_srl_ml),
-                })
-                _fac2 = pd.concat([_fac, pd.DataFrame([_new_row])], ignore_index=True)
-                save_faculty(_fac2[FACULTY_COLUMNS])
-                for _k in [k for k in list(st.session_state.keys())
-                           if k.startswith("p3_add_cls_") or k.startswith("p3_add_srl_") or k.startswith("p3_add_br_")
-                           or k.startswith("p3_add_yr_")]:
-                    st.session_state.pop(_k, None)
-                st.session_state["p3_add_cls_n"] = 1
-                st.session_state["p3_fac_flash"] = f"✅ '{_n_name.strip() or '(बिना नाम)'}' जुड़ गए।"
-                st.rerun()
+    # ➕ NAYA TUTOR JODEIN (function upar module-level me hai — P1 me bhi yahi form use hota hai)
+    p3_add_tutor_form(db, _fac, _dept_opts, _p3_subj_type, _p3_class_col, _p3_branch_col, _p3_serial_col, _p3_total_col)
 
     # ---- ✏️ EDIT FORM (Actions column ke ✏️ Edit button se khulta hai) ----
     _eidx = st.session_state.get("p3_edit_idx")
