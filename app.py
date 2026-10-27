@@ -849,6 +849,25 @@ st.markdown("""
     hr { border-color: #E3E9F1 !important; }
     .stSpinner, [data-testid="stStatusWidget"] { color: var(--pg-gold-dark) !important; }
 
+
+    /* ---------- P3 Guardian Tutors table: P2 jaisa design ---------- */
+    .st-key-p3_table { gap: 0 !important; background: #fff; border: 1px solid #D5DEEA; border-radius: 14px;
+        box-shadow: 0 1px 2px rgba(15,42,74,.06), 0 4px 14px rgba(15,42,74,.07); overflow-x: auto; overflow-y: hidden; }
+    .st-key-p3_table [data-testid="stHorizontalBlock"] { min-width: 1020px; flex-wrap: nowrap !important; align-items: center !important; gap: .5rem !important; }
+    .st-key-p3_table [data-testid="stColumn"] { min-width: 0 !important; }
+    .st-key-p3_table [data-testid="stColumn"] [data-testid="stHorizontalBlock"] { min-width: 0 !important; gap: .35rem !important; }
+    .st-key-p3_table p, .st-key-p3_table div[data-testid="stMarkdownContainer"] { word-break: normal; overflow-wrap: break-word; margin: 0; }
+    .st-key-p3_table_head { gap: 0 !important; background: linear-gradient(180deg,#14355E 0%,#0F2A4A 100%); border-bottom: 3px solid #C9973F;
+        padding: 12px 12px; min-width: 1020px; }
+    .st-key-p3_table_head, .st-key-p3_table_head * { color: #fff !important; font-family: 'Poppins','Inter',sans-serif; font-size: 13px !important; }
+    [class*="st-key-p3_row_"] { gap: 0 !important; padding: 9px 12px; border-bottom: 1px solid #E6ECF3; min-width: 1020px;
+        transition: background .12s ease; }
+    [class*="st-key-p3_row_a_"] { background: #fff; }
+    [class*="st-key-p3_row_b_"] { background: #F7F9FC; }
+    [class*="st-key-p3_row_"]:hover { background: #FFF6E3 !important; }
+    [class*="st-key-p3_row_"] [data-testid="stMarkdownContainer"] { font-size: 13.5px; color: #1B2430; }
+    [class*="st-key-p3_row_"] .stCheckbox { justify-content: center; }
+
     /* ---------- Scrollbar ---------- */
     ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-thumb { background: #C3CEDC; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
@@ -2023,46 +2042,48 @@ elif choice == "P3 — Guardian Tutors List":
         _col_widths = [0.5, 0.5, 2.0, 1.3, 1.2, 1.0, 1.3, 1.0, 1.1, 1.1, 1.2]
         _headers = ["☑️", "S.No.", "Name of Faculty", "Department", "Mobile No.", "Degree", "Branch", "Year",
                     "Serial No.", "Total Number of Students", "⚙️ Actions"]
-        _hcols = st.columns(_col_widths)
-        for _hc, _htxt in zip(_hcols, _headers):
-            _hc.markdown(f"<div style='text-align:center; font-weight:700;'>{_htxt}</div>", unsafe_allow_html=True)
-        st.markdown("<hr style='margin:2px 0 8px 0;'>", unsafe_allow_html=True)
+        _p3_tbl = st.container(key="p3_table")      # poori table ek card — styling CSS me (st-key-p3_table)
+        with _p3_tbl.container(key="p3_table_head"):
+            _hcols = st.columns(_col_widths)
+            for _hc, _htxt in zip(_hcols, _headers):
+                _hc.markdown(f"<div style='text-align:center; font-weight:700;'>{_htxt}</div>", unsafe_allow_html=True)
 
         for _sn, (_aidx, _arow) in enumerate(_fac_view.iterrows(), start=1):
             _mob_disp = _arow["Mobile Number"].strip() or MOBILE_BLANK
             _tot_disp = _p3_total_from_serial(_arow[_p3_serial_col]) or _arow[_p3_total_col] or "—"
-            _rc = st.columns(_col_widths)
-            _ctr = lambda v: f"<div style='text-align:center;'>{v}</div>"      # Number hamesha beech me
-            _rc[0].checkbox("चुनें", key=f"p3_sel_{_aidx}", label_visibility="collapsed")
-            _rc = _rc[1:]
-            # Degree aur Year — Allotted Class text (jaise "PGDCA I Year") se alag-alag nikalte hain, har line ke liye
-            _deg_lines, _yr_lines = [], []
-            for _cl in str(_arow[_p3_class_col]).split("\n"):
-                if _cl.strip():
-                    _dg, _yr = parse_allotted_class(_cl)
-                    _deg_lines.append(_dg or _cl.strip())
-                    _yr_lines.append(_yr or "—")
-            _rc[1].write(_arow["Faculty Name"].strip() or "(बिना नाम)")
-            _rc[2].write(_arow["Tutor Department"].strip() or "—")
-            _rc[3].markdown(_ctr(_mob_disp), unsafe_allow_html=True)
-            _rc[4].markdown("  \n".join(_deg_lines) or "—")
-            _rc[5].markdown(str(_arow[_p3_branch_col]).replace("\n", "  \n") or "—")
-            _rc[6].markdown("  \n".join(_yr_lines) or "—")
-            _rc[7].markdown(_ctr((_arow[_p3_serial_col].replace("\n", "<br>") or "—")), unsafe_allow_html=True)
-            _rc[8].markdown(_ctr(_tot_disp), unsafe_allow_html=True)
-            with _rc[9]:
-                _ea1, _ea2 = st.columns(2)
-                with _ea1:
-                    if st.button("✏️", key=f"p3_edit_btn_{_aidx}", use_container_width=True, help="Edit"):
-                        st.session_state["p3_edit_idx"] = _aidx
-                        st.session_state.pop("p3_assign_idx", None)
-                        st.rerun()
-                with _ea2:
-                    if st.button("📌", key=f"p3_assign_btn_{_aidx}", use_container_width=True, help="Assign"):
-                        st.session_state["p3_assign_idx"] = _aidx
-                        st.session_state.pop("p3_edit_idx", None)
-                        st.rerun()
-            st.markdown("<hr style='margin:2px 0 8px 0;'>", unsafe_allow_html=True)
+            _row_box = _p3_tbl.container(key=f"p3_row_{'a' if _sn % 2 else 'b'}_{_aidx}")
+            with _row_box:
+                _rc = st.columns(_col_widths)
+                _ctr = lambda v: f"<div style='text-align:center;'>{v}</div>"      # Number hamesha beech me
+                _rc[0].checkbox("चुनें", key=f"p3_sel_{_aidx}", label_visibility="collapsed")
+                _rc = _rc[1:]
+                # Degree aur Year — Allotted Class text (jaise "PGDCA I Year") se alag-alag nikalte hain, har line ke liye
+                _deg_lines, _yr_lines = [], []
+                for _cl in str(_arow[_p3_class_col]).split("\n"):
+                    if _cl.strip():
+                        _dg, _yr = parse_allotted_class(_cl)
+                        _deg_lines.append(_dg or _cl.strip())
+                        _yr_lines.append(_yr or "—")
+                _rc[1].write(_arow["Faculty Name"].strip() or "(बिना नाम)")
+                _rc[2].write(_arow["Tutor Department"].strip() or "—")
+                _rc[3].markdown(_ctr(_mob_disp), unsafe_allow_html=True)
+                _rc[4].markdown("  \n".join(_deg_lines) or "—")
+                _rc[5].markdown(str(_arow[_p3_branch_col]).replace("\n", "  \n") or "—")
+                _rc[6].markdown("  \n".join(_yr_lines) or "—")
+                _rc[7].markdown(_ctr((_arow[_p3_serial_col].replace("\n", "<br>") or "—")), unsafe_allow_html=True)
+                _rc[8].markdown(_ctr(_tot_disp), unsafe_allow_html=True)
+                with _rc[9]:
+                    _ea1, _ea2 = st.columns(2)
+                    with _ea1:
+                        if st.button("✏️", key=f"p3_edit_btn_{_aidx}", use_container_width=True, help="Edit"):
+                            st.session_state["p3_edit_idx"] = _aidx
+                            st.session_state.pop("p3_assign_idx", None)
+                            st.rerun()
+                    with _ea2:
+                        if st.button("📌", key=f"p3_assign_btn_{_aidx}", use_container_width=True, help="Assign"):
+                            st.session_state["p3_assign_idx"] = _aidx
+                            st.session_state.pop("p3_edit_idx", None)
+                            st.rerun()
 
         _dl = _fac_view.reset_index(drop=True).copy()
         _dl.insert(0, "S.N.", range(1, len(_dl) + 1))
