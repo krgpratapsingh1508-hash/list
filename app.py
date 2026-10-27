@@ -1110,7 +1110,10 @@ def sort_faculty_view(df, mode):
     return d.drop(columns=["_nm", "_dp"])
 
 
-def print_button(body_html, label="🖨️ Print करें", height=52):
+def print_button(body_html, label="🖨️ Print करें", height=52, dl_bytes=None, dl_name="file.xlsx", dl_mime="application/octet-stream"):
+    """dl_bytes dene par ek hi button dabate hi file Download bhi hoti hai aur Print dialog bhi khulta hai."""
+    import base64 as _b64
+    _dl_b64 = _b64.b64encode(dl_bytes).decode("ascii") if dl_bytes else ""
     doc = (
         '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Print</title><style>'
         '@page { margin: 8mm; }'
@@ -1123,6 +1126,8 @@ def print_button(body_html, label="🖨️ Print करें", height=52):
         '</style></head><body>' + body_html + '</body></html>'
     )
     payload = json.dumps(doc).replace("</", "<\\/")
+    _dl_name_js = json.dumps(dl_name)
+    _dl_mime_js = json.dumps(dl_mime)
     components.html(f"""
     <style>
       body {{ margin:0; }}
@@ -1138,7 +1143,22 @@ def print_button(body_html, label="🖨️ Print करें", height=52):
     <button id="pb">{label}</button>
     <script>
     const DOC = {payload};
+    const DL_B64 = "{_dl_b64}";
+    function doDownload() {{
+        if (!DL_B64) return 0;
+        const bin = atob(DL_B64), arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([arr], {{type: {_dl_mime_js}}}));
+        const a = document.createElement('a');
+        a.href = url; a.download = {_dl_name_js}; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function() {{ URL.revokeObjectURL(url); }}, 10000);
+        return 700;       // download shuru hone ke baad thoda ruk kar Print dialog kholo
+    }}
     document.getElementById('pb').addEventListener('click', function() {{
+        const wait = doDownload();
+        setTimeout(openPrint, wait);
+    }});
+    function openPrint() {{
         const old = document.getElementById('pf'); if (old) old.remove();
         const f = document.createElement('iframe');
         f.id = 'pf';
@@ -1147,7 +1167,7 @@ def print_button(body_html, label="🖨️ Print करें", height=52):
         const d = f.contentWindow.document;
         d.open(); d.write(DOC); d.close();
         setTimeout(function() {{ f.contentWindow.focus(); f.contentWindow.print(); }}, 300);
-    }});
+    }}
     </script>
     """, height=height)
 
@@ -2943,17 +2963,14 @@ elif choice == "P5 — Print Panel":
             _xl_fname = re.sub(r'[\\/:*?"<>|\r\n\t]+', " ", _xl_fname)
             _xl_fname = re.sub(r"\s+", " ", _xl_fname).strip()[:120].strip() or "print_panel_list"
             pr_col1, pr_col2 = st.columns(2)
-            with pr_col1:
-                st.download_button(
-                    "📗 Excel Download करें (Header के साथ)", _xl_bytes,
-                    file_name=f"{_xl_fname}.xlsx", mime=XLSX_MIME, use_container_width=True, key="p5_xlsx_dl",
-                    help="Print जैसा Header ऊपर और Table नीचे — Excel में खोलकर वैसा ही दिखेगा।")
+            _p5_dl = dict(dl_bytes=_xl_bytes, dl_name=f"{_xl_fname}.xlsx", dl_mime=XLSX_MIME)
+            with pr_col2:
                 st.download_button(
                     "⬇️ CSV Download करें (बिना Header)",
                     preview_df.to_csv(index=False).encode("utf-8-sig"),
                     file_name="print_panel_list.csv", mime="text/csv", use_container_width=True,
                 )
-            with pr_col2:
+            with pr_col1:
                 if len(_p5_classes_present) > 1:
                     st.caption(f"ℹ️ इस Tutor की {len(_p5_classes_present)} अलग-अलग Class मिलीं — Print में हर Class के लिए "
                                "यह Header (ऊपर वाला) दोबारा शुरू होगा, अपने S.No के साथ।")
@@ -2979,12 +2996,12 @@ elif choice == "P5 — Print Panel":
                                     f'{_build_header_html("Arial, sans-serif", line2_override=_cls_line2)}'
                                     f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
                         _sections.append(_cls_hdr + df_to_print_html(_cls_preview))
-                    print_button("".join(_sections), label="🖨️ Print करें (हर Class अलग से)")
+                    print_button("".join(_sections), label="📗🖨️ Excel Download + Print (हर Class अलग से)", **_p5_dl)
                 else:
                     _table_html = df_to_print_html(preview_df)
                     _hdr = (f'<div style="margin-bottom:10px;">{_build_header_html("Arial, sans-serif")}'
                             f'<hr style="border:none; border-top:2px solid {st.session_state.ph_color1}; margin-top:10px;"></div>')
-                    print_button(_hdr + _table_html, label="🖨️ Print करें")
+                    print_button(_hdr + _table_html, label="📗🖨️ Excel Download + Print एक साथ", **_p5_dl)
         else:
             st.warning("⚠️ Print करने के लिए कम से कम एक Column चुनें।")
 
