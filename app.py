@@ -940,33 +940,34 @@ st.markdown("""
         display: flex !important; flex-wrap: wrap !important; gap: 10px !important;
         background: transparent !important; padding: 4px 0 !important; border-radius: 0 !important;
     }
-    [data-testid="stMain"] div[role="radiogroup"] > label {
+    [data-testid="stMain"] div[role="radiogroup"] label {
         position: relative; display: inline-flex !important; align-items: center !important; margin: 0 !important;
         background: #fff !important; border: 1.5px solid #D5DEEA !important; border-radius: 999px !important;
         padding: 9px 20px !important; cursor: pointer !important; min-height: 42px;
         box-shadow: 0 1px 2px rgba(15,42,74,.05) !important;
         transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .12s ease !important;
     }
-    /* radio ka gola chhupao (input chhota rehta hai, pehla <div> hi gola hota hai) */
-    [data-testid="stMain"] div[role="radiogroup"] > label > div:first-of-type:not(:last-of-type) { display: none !important; }
-    [data-testid="stMain"] div[role="radiogroup"] > label > div:first-child:not([data-testid]):has(+ div) { display: none !important; }
-    [data-testid="stMain"] div[role="radiogroup"] > label p {
+    /* radio ka gola chhupao — label ke andar jo bhi <div>/<span> text wala nahi hai wahi gola hai */
+    [data-testid="stMain"] div[role="radiogroup"] label > div:not([data-testid="stMarkdownContainer"]):not(:has([data-testid="stMarkdownContainer"])),
+    [data-testid="stMain"] div[role="radiogroup"] label > span:not(:has([data-testid="stMarkdownContainer"])) { display: none !important; }
+    [data-testid="stMain"] div[role="radiogroup"] label input { position: absolute; opacity: 0; pointer-events: none; }
+    [data-testid="stMain"] div[role="radiogroup"] label p {
         margin: 0 !important; font-family: 'Poppins','Inter',sans-serif !important; font-size: 14px !important;
         font-weight: 500 !important; color: #35506F !important; line-height: 1.3 !important;
     }
-    [data-testid="stMain"] div[role="radiogroup"] > label:hover {
+    [data-testid="stMain"] div[role="radiogroup"] label:hover {
         border-color: #C9973F !important; background: #FFF9EC !important; transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(201,151,63,.20) !important;
     }
-    [data-testid="stMain"] div[role="radiogroup"] > label:has(input:checked) {
+    [data-testid="stMain"] div[role="radiogroup"] label:has(input:checked) {
         background: linear-gradient(135deg, #0F2A4A 0%, #1D4A7A 70%, #2A5E96 100%) !important;
         border-color: #0F2A4A !important; box-shadow: 0 6px 16px rgba(15,42,74,.30) !important;
     }
-    [data-testid="stMain"] div[role="radiogroup"] > label:has(input:checked) p { color: #fff !important; font-weight: 600 !important; }
-    [data-testid="stMain"] div[role="radiogroup"] > label:has(input:checked)::before {
+    [data-testid="stMain"] div[role="radiogroup"] label:has(input:checked) p { color: #fff !important; font-weight: 600 !important; }
+    [data-testid="stMain"] div[role="radiogroup"] label:has(input:checked)::before {
         content: "✓"; color: #E9C989; font-weight: 800; margin-right: 8px; font-size: 14px;
     }
-    [data-testid="stMain"] div[role="radiogroup"] > label:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(201,151,63,.35) !important; }
+    [data-testid="stMain"] div[role="radiogroup"] label:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(201,151,63,.35) !important; }
 
     /* ---------- Checkbox ---------- */
     [data-testid="stMain"] .stCheckbox label { cursor: pointer; border-radius: 10px; padding: 4px 8px; transition: background .12s ease; }
