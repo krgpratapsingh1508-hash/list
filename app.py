@@ -866,6 +866,52 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================================
+# ✨ THEME CSS v3 — Select / Dropdown / Scroll list ka behtar design
+# ==========================================================
+st.markdown("""
+    <style>
+    /* ---------- Select box (band hone par) ---------- */
+    .stSelectbox div[data-baseweb="select"] > div, .stMultiSelect div[data-baseweb="select"] > div {
+        cursor: pointer !important; background: linear-gradient(180deg,#fff 0%,#F9FBFE 100%) !important;
+        box-shadow: 0 1px 2px rgba(15,42,74,.05) !important; font-size: 14px !important; color: #1B2430 !important;
+    }
+    .stSelectbox div[data-baseweb="select"] svg, .stMultiSelect div[data-baseweb="select"] svg { color: #1D4A7A !important; }
+    .stSelectbox div[data-baseweb="select"][aria-disabled="true"] > div { background: #F1F4F8 !important; opacity: .7; cursor: not-allowed !important; }
+    .stSelectbox div[data-baseweb="select"] input, .stMultiSelect div[data-baseweb="select"] input { cursor: pointer !important; }
+
+    /* ---------- Dropdown list (khulne par) ---------- */
+    div[data-baseweb="popover"] > div { border-radius: 14px !important; border: 1px solid #D5DEEA !important;
+        box-shadow: 0 12px 32px rgba(15,42,74,.20) !important; overflow: hidden !important; }
+    div[data-baseweb="popover"] ul[role="listbox"] {
+        padding: 6px !important; max-height: 320px !important; overflow-y: auto !important; background: #fff !important;
+    }
+    div[data-baseweb="popover"] li[role="option"] {
+        border-radius: 9px !important; margin: 2px 0 !important; padding: 10px 12px !important;
+        font-size: 14px !important; line-height: 1.35 !important; color: #1B2430 !important;
+        border-left: 3px solid transparent !important; transition: background .12s ease, border-color .12s ease !important;
+        white-space: normal !important; word-break: break-word;
+    }
+    div[data-baseweb="popover"] li[role="option"]:hover, div[data-baseweb="popover"] li[role="option"][data-highlighted="true"] {
+        background: #FFF3D6 !important; border-left-color: #C9973F !important;
+    }
+    div[data-baseweb="popover"] li[role="option"][aria-selected="true"] {
+        background: #E6F0FF !important; border-left-color: #1D4A7A !important; color: #0F2A4A !important; font-weight: 600 !important;
+    }
+    /* Dropdown ki scrollbar */
+    div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar { width: 8px; }
+    div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar-track { background: #F1F4F8; border-radius: 10px; }
+    div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar-thumb { background: #B9C6D8; border-radius: 10px; border: 2px solid #F1F4F8; }
+    div[data-baseweb="popover"] ul[role="listbox"]::-webkit-scrollbar-thumb:hover { background: #8FA3BF; }
+    /* Dropdown me kuch na mile (search) */
+    div[data-baseweb="popover"] [data-testid="stSelectboxVirtualDropdown"] { background: #fff !important; }
+
+    /* ---------- Streamlit ki apni tables/editor me scroll ---------- */
+    div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] { border: 1px solid #D5DEEA !important; }
+    [data-testid="stMain"] *::-webkit-scrollbar { width: 10px; height: 10px; }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==========================================================
 # 🖨️ PRINT HELPER — button dabate hi browser ka Print dialog khulta hai
 # (sirf diya gaya HTML print hota hai; Streamlit page ka baaki hissa nahi)
 # ==========================================================
@@ -907,12 +953,21 @@ def show_list(df, height=None, max_rows=1500, **_ignored):
     _box = f"max-height:{int(height)}px;" if height else "max-height:520px;"
     st.markdown(
         '<style>'
-        '.nep-list{overflow:auto;border:1px solid rgba(128,128,128,.4);border-radius:6px;' + _box + '}'
-        '.nep-list table{width:100%;border-collapse:collapse;font-size:13px;}'
-        '.nep-list th{position:sticky;top:0;background:#eef1f6;color:#0F2A4A;text-align:center !important;font-weight:700;'
-        'border:1px solid rgba(128,128,128,.4);padding:6px 8px;white-space:nowrap;}'
-        '.nep-list td{border:1px solid rgba(128,128,128,.3);padding:5px 8px;}'
-        '.nep-list td.c{text-align:center;} .nep-list td.l{text-align:left;}'
+        '.nep-list{overflow:auto;border:1px solid #D5DEEA;border-radius:14px;background:#fff;'
+        'box-shadow:0 1px 2px rgba(15,42,74,.06),0 4px 14px rgba(15,42,74,.07);' + _box + '}'
+        '.nep-list table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px;font-family:Inter,sans-serif;}'
+        '.nep-list th{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,#14355E 0%,#0F2A4A 100%);color:#fff;'
+        'text-align:center !important;font-weight:600;letter-spacing:.2px;font-family:Poppins,Inter,sans-serif;font-size:13px;'
+        'border-bottom:3px solid #C9973F;border-right:1px solid rgba(255,255,255,.12);padding:11px 12px;white-space:nowrap;}'
+        '.nep-list th:last-child{border-right:none;}'
+        '.nep-list td{border-bottom:1px solid #E6ECF3;border-right:1px solid #EEF2F7;padding:9px 12px;color:#1B2430;vertical-align:middle;}'
+        '.nep-list td:last-child{border-right:none;}'
+        '.nep-list tbody tr:nth-child(even) td{background:#F7F9FC;}'
+        '.nep-list tbody tr:hover td{background:#FFF6E3;}'
+        '.nep-list tbody tr:last-child td{border-bottom:none;}'
+        '.nep-list td.c{text-align:center;font-variant-numeric:tabular-nums;} .nep-list td.l{text-align:left;}'
+        '.nep-list::-webkit-scrollbar{width:10px;height:10px;} .nep-list::-webkit-scrollbar-thumb{background:#B9C6D8;border-radius:10px;border:2px solid #fff;}'
+        '.nep-list::-webkit-scrollbar-thumb:hover{background:#8FA3BF;} .nep-list::-webkit-scrollbar-corner{background:#fff;}'
         '</style><div class="nep-list"><table><thead><tr>' + _th + '</tr></thead><tbody>' + "".join(_body) + '</tbody></table></div>',
         unsafe_allow_html=True)
     if _total > max_rows:
